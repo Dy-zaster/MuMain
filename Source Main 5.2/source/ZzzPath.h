@@ -15,11 +15,14 @@ public:
 
 public:
     void SetMapDimensions(int iWidth, int iHeight, WORD* pbyMap);
+    void SetMaxSearchCount(int maxWithErrorCheck, int maxWithoutErrorCheck);
 
 private:
     int	m_iWidth, m_iHeight;
     int m_iSize;
     WORD* m_pbyMap;
+    int m_iMaxCheckCountWithCheck;
+    int m_iMaxCheckCountWithoutCheck;
 
 private:
     int m_iNumPath;
@@ -70,6 +73,8 @@ inline PATH::PATH()
     m_piCostToStart = NULL;
     m_pxPrev = NULL;
     m_pyPrev = NULL;
+    m_iMaxCheckCountWithCheck = 500;
+    m_iMaxCheckCountWithoutCheck = 50;
 }
 
 inline PATH::~PATH()
@@ -117,6 +122,14 @@ inline void PATH::SetMapDimensions(int iWidth, int iHeight, WORD* pbyMap)
     m_pxPrev = new int[m_iSize];
     m_pyPrev = new int[m_iSize];
     ZeroMemory(m_pbyClosed, m_iSize * sizeof(BYTE));
+}
+
+inline void PATH::SetMaxSearchCount(int maxWithErrorCheck, int maxWithoutErrorCheck)
+{
+    if (maxWithErrorCheck < 1) maxWithErrorCheck = 1;
+    if (maxWithoutErrorCheck < 1) maxWithoutErrorCheck = 1;
+    m_iMaxCheckCountWithCheck = maxWithErrorCheck;
+    m_iMaxCheckCountWithoutCheck = maxWithoutErrorCheck;
 }
 
 inline bool PATH::AddClearPos(int iIndex)
@@ -218,7 +231,7 @@ inline bool PATH::FindPath(int xStart, int yStart, int xEnd, int yEnd, bool bErr
         return false;
     }
 
-    int iMaxCount = bErrorCheck ? 500 : 50;
+    int iMaxCount = bErrorCheck ? m_iMaxCheckCountWithCheck : m_iMaxCheckCountWithoutCheck;
     for (int iCheckCount = iMaxCount; 0 < m_btOpenNodes.GetCount() && iCheckCount > 0; --iCheckCount)
     {
         int xTest, yTest;

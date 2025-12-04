@@ -24,11 +24,18 @@ extern BYTE m_OccupationState;
 extern int TargetX;
 extern int TargetY;
 extern bool MouseLButtonPush;
+extern bool MouseRButtonPush;
+extern bool MouseRButton;
+extern bool MouseRButtonPop;
 
 using namespace SEASON3B;
 
 namespace
 {
+    constexpr int AUTO_WALK_SEARCH_WITH_ERROR = TERRAIN_SIZE * TERRAIN_SIZE;
+    constexpr int AUTO_WALK_SEARCH_WITHOUT_ERROR = TERRAIN_SIZE * TERRAIN_SIZE;
+    constexpr int AUTO_WALK_PREFETCH_THRESHOLD = 3;
+
     PATH g_AutoWalkPathfinder;
     bool g_AutoWalkPathfinderReady = false;
 
@@ -37,6 +44,7 @@ namespace
         if (g_AutoWalkPathfinderReady == false)
         {
             g_AutoWalkPathfinder.SetMapDimensions(TERRAIN_SIZE, TERRAIN_SIZE, TerrainWall);
+            g_AutoWalkPathfinder.SetMaxSearchCount(AUTO_WALK_SEARCH_WITH_ERROR, AUTO_WALK_SEARCH_WITHOUT_ERROR);
             g_AutoWalkPathfinderReady = true;
         }
     }
@@ -231,30 +239,45 @@ bool SEASON3B::CNewUIMiniMap::Render()
 
     m_BtnExit.Render(true);
 
-    if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) && CheckMouseIn(0, 0, 640, 430))
+    const bool cursorInMiniMap = CheckMouseIn(0, 0, 640, 430);
+    const bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+
+    int coordX = (Hero != NULL) ? Hero->PositionX : 0;
+    int coordY = (Hero != NULL) ? Hero->PositionY : 0;
+    bool hasCursorCoords = false;
+
+    if (cursorInMiniMap)
     {
         float worldX = 0.f;
         float worldY = 0.f;
         if (GetWorldPositionFromScreen(static_cast<float>(MouseX), static_cast<float>(MouseY), worldX, worldY))
         {
-            const int coordX = static_cast<int>(worldX + 0.5f);
-            const int coordY = static_cast<int>(worldY + 0.5f);
-
-            wchar_t coordBuffer[64];
-            swprintf(coordBuffer, L"X: %d  Y: %d", coordX, coordY);
-
-            const DWORD backupTextColor = g_pRenderText->GetTextColor();
-            const DWORD backupBgColor = g_pRenderText->GetBgColor();
-
-            g_pRenderText->SetFont(g_hFont);
-            g_pRenderText->SetTextColor(RGBA(255, 255, 255, 255));
-            g_pRenderText->SetBgColor(RGBA(0, 0, 0, 160));
-            g_pRenderText->RenderText(0, 8, coordBuffer, 640, 0, RT3_SORT_CENTER);
-
-            g_pRenderText->SetTextColor(backupTextColor);
-            g_pRenderText->SetBgColor(backupBgColor);
+            coordX = static_cast<int>(worldX + 0.5f);
+            coordY = static_cast<int>(worldY + 0.5f);
+            hasCursorCoords = true;
         }
     }
+
+    wchar_t coordBuffer[160];
+    if (shiftHeld && hasCursorCoords)
+    {
+        swprintf(coordBuffer, L"Shift: clic izquierdo para caminar a X: %d  Y: %d  (clic derecho cancela)", coordX, coordY);
+    }
+    else
+    {
+        swprintf(coordBuffer, L"X: %d  Y: %d", coordX, coordY);
+    }
+
+    const DWORD backupTextColor = g_pRenderText->GetTextColor();
+    const DWORD backupBgColor = g_pRenderText->GetBgColor();
+
+    g_pRenderText->SetFont(g_hFont);
+    g_pRenderText->SetTextColor(RGBA(255, 255, 255, 255));
+    g_pRenderText->SetBgColor(RGBA(0, 0, 0, 160));
+    g_pRenderText->RenderText(0, 8, coordBuffer, 640, 0, RT3_SORT_CENTER);
+
+    g_pRenderText->SetTextColor(backupTextColor);
+    g_pRenderText->SetBgColor(backupBgColor);
 
     DisableAlphaBlend();
 
@@ -357,16 +380,48 @@ bool SEASON3B::CNewUIMiniMap::UpdateMouseEvent()
     }
 
     const bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-    if (shiftHeld && MouseLButtonPush && CheckMouseIn(0, 0, 640, 430))
+    const bool cursorInMiniMap = CheckMouseIn(0, 0, 640, 430);
+
+    if (shiftHeld && cursorInMiniMap)
     {
-        float worldX = 0.f;
-        float worldY = 0.f;
-        if (GetWorldPositionFromScreen(static_cast<float>(MouseX), static_cast<float>(MouseY), worldX, worldY))
+        if (MouseRButtonPush)
         {
-            StartAutoWalk(static_cast<int>(worldX + 0.5f), static_cast<int>(worldY + 0.5f));
+            CancelAutoWalk();
+
+            if (Hero)
+            {
+                PATH_t& heroPath = Hero->Path;
+                heroPath.Lock.lock();
+                heroPath.PathNum = 0;
+                heroPath.CurrentPath = 0;
+                heroPath.CurrentPathFloat = 0;
+                heroPath.Lock.unlock();
+
+                Hero->Movement = false;
+                Hero->MovementType = MOVEMENT_MOVE;
+                TargetX = Hero->PositionX;
+                TargetY = Hero->PositionY;
+            }
+
+            MouseRButtonPush = false;
+            MouseRButton = false;
+            MouseRButtonPop = false;
+
             PlayBuffer(SOUND_CLICK01);
+            return false;
         }
-        return false;
+
+        if (MouseLButtonPush)
+        {
+            float worldX = 0.f;
+            float worldY = 0.f;
+            if (GetWorldPositionFromScreen(static_cast<float>(MouseX), static_cast<float>(MouseY), worldX, worldY))
+            {
+                StartAutoWalk(static_cast<int>(worldX + 0.5f), static_cast<int>(worldY + 0.5f));
+                PlayBuffer(SOUND_CLICK01);
+            }
+            return false;
+        }
     }
 
     if (IsPress(VK_LBUTTON))
@@ -378,7 +433,7 @@ bool SEASON3B::CNewUIMiniMap::UpdateMouseEvent()
         }
     }
 
-    if (CheckMouseIn(0, 0, 640, 430))
+    if (cursorInMiniMap)
     {
         return false;
     }
@@ -669,6 +724,13 @@ void SEASON3B::CNewUIMiniMap::UpdateAutoWalk()
 
     if (Hero->Movement)
     {
+        if (ShouldPrefetchAutoWalkPath())
+        {
+            if (TryAutoWalkStep() == false)
+            {
+                CancelAutoWalk();
+            }
+        }
         return;
     }
 
@@ -742,6 +804,43 @@ bool SEASON3B::CNewUIMiniMap::TryAutoWalkStep()
     TargetY = m_AutoWalkTarget.y;
 
     SendMove(Hero, &Hero->Object);
+    return true;
+}
+
+bool SEASON3B::CNewUIMiniMap::ShouldPrefetchAutoWalkPath() const
+{
+    if (Hero == NULL)
+        return false;
+
+    if (m_AutoWalkPreviewPath.size() <= 1)
+        return false;
+
+    PATH_t& heroPath = Hero->Path;
+    heroPath.Lock.lock();
+    const int totalNodesInChunk = heroPath.PathNum;
+    const int currentNodeInChunk = heroPath.CurrentPath;
+    heroPath.Lock.unlock();
+
+    if (totalNodesInChunk <= 1)
+        return false;
+
+    const int transitionsRemaining = (totalNodesInChunk - 1) - currentNodeInChunk;
+    if (transitionsRemaining > AUTO_WALK_PREFETCH_THRESHOLD)
+        return false;
+    if (transitionsRemaining < 0)
+        return false;
+
+    if (m_AutoWalkCurrentIndex < 0)
+        return false;
+
+    const int chunkStartIndex = m_AutoWalkCurrentIndex - currentNodeInChunk;
+    if (chunkStartIndex < 0)
+        return false;
+
+    const size_t chunkEndIndex = static_cast<size_t>(chunkStartIndex + totalNodesInChunk - 1);
+    if (chunkEndIndex + 1 >= m_AutoWalkPreviewPath.size())
+        return false;
+
     return true;
 }
 

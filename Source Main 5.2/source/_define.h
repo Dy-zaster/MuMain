@@ -67,7 +67,7 @@ constexpr auto MAX_PATH_FIND = 15;
 constexpr auto FACTOR_PATH_DIST = 5;
 constexpr auto FACTOR_PATH_DIST_DIAG = ((int)((float)FACTOR_PATH_DIST * 1.414f));
 
-constexpr auto MAX_COUNT_PATH = 500;
+constexpr auto MAX_COUNT_PATH = 65536;
 constexpr auto MAX_INT_FORPATH = (65000 * 30000);
 
 enum EPathNodeState : BYTE

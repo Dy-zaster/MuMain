@@ -93,6 +93,7 @@ namespace SEASON3B
         void StartAutoWalk(int targetX, int targetY);
         void CancelAutoWalk();
         void UpdateAutoWalk();
+        bool ShouldPrefetchAutoWalkPath() const;
         bool TryAutoWalkStep();
         bool BuildAutoWalkPath(int startX, int startY, int targetX, int targetY);
         bool SyncAutoWalkIndexWithHero();
