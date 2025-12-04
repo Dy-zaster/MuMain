@@ -14,14 +14,44 @@
 #include "NewUIMyInventory.h"
 #include "CSitemOption.h"
 #include "MapManager.h"
+#include "ZzzAI.h"
+#include "ZzzInterface.h"
+#include "ZzzLodTerrain.h"
+#include "ZzzPath.h"
+#include "GMCrywolf1st.h"
 
 extern BYTE m_OccupationState;
+extern int TargetX;
+extern int TargetY;
+extern bool MouseLButtonPush;
 
 using namespace SEASON3B;
+
+namespace
+{
+    PATH g_AutoWalkPathfinder;
+    bool g_AutoWalkPathfinderReady = false;
+
+    void EnsureAutoWalkPathfinderReady()
+    {
+        if (g_AutoWalkPathfinderReady == false)
+        {
+            g_AutoWalkPathfinder.SetMapDimensions(TERRAIN_SIZE, TERRAIN_SIZE, TerrainWall);
+            g_AutoWalkPathfinderReady = true;
+        }
+    }
+}
+
+static const wchar_t AUTO_WALK_FAIL_MESSAGE[] = L"No hay un camino disponible hacia ese punto.";
 
 SEASON3B::CNewUIMiniMap::CNewUIMiniMap()
 {
     m_pNewUIMng = NULL;
+    m_bAutoWalkActive = false;
+    m_AutoWalkTarget.x = 0;
+    m_AutoWalkTarget.y = 0;
+    m_AutoWalkPreviewPath.clear();
+    m_AutoWalkCurrentIndex = 0;
 }
 
 SEASON3B::CNewUIMiniMap::~CNewUIMiniMap()
@@ -173,6 +203,13 @@ bool SEASON3B::CNewUIMiniMap::Render()
             break;
     }
 
+    if (m_bAutoWalkActive && m_AutoWalkPreviewPath.size() > 1)
+    {
+        glColor4f(0.f, 0.85f, 1.f, 0.85f);
+        RenderAutoWalkPath(m_Lenth[m_MiniPos].x - Tx, m_Lenth[m_MiniPos].y - Ty, m_Lenth[m_MiniPos].x, m_Lenth[m_MiniPos].y, Rot);
+        glColor4f(1.f, 1.f, 1.f, 1.f);
+    }
+
     float Ch_wid = 12;
     RenderImage(IMAGE_MINIMAP_INTERFACE + 3, 325, 230, Ch_wid, Ch_wid, 0.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
 
@@ -227,6 +264,7 @@ bool SEASON3B::CNewUIMiniMap::Render()
 
 bool SEASON3B::CNewUIMiniMap::Update()
 {
+    UpdateAutoWalk();
     return true;
 }
 
@@ -318,6 +356,19 @@ bool SEASON3B::CNewUIMiniMap::UpdateMouseEvent()
         return true;
     }
 
+    const bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (shiftHeld && MouseLButtonPush && CheckMouseIn(0, 0, 640, 430))
+    {
+        float worldX = 0.f;
+        float worldY = 0.f;
+        if (GetWorldPositionFromScreen(static_cast<float>(MouseX), static_cast<float>(MouseY), worldX, worldY))
+        {
+            StartAutoWalk(static_cast<int>(worldX + 0.5f), static_cast<int>(worldY + 0.5f));
+            PlayBuffer(SOUND_CLICK01);
+        }
+        return false;
+    }
+
     if (IsPress(VK_LBUTTON))
     {
         ret = Check_Mouse(MouseX, MouseY);
@@ -381,6 +432,116 @@ bool SEASON3B::CNewUIMiniMap::Check_Btn(int mx, int my)
     return false;
 }
 
+bool SEASON3B::CNewUIMiniMap::BuildAutoWalkPath(int startX, int startY, int targetX, int targetY)
+{
+    m_AutoWalkPreviewPath.clear();
+    m_AutoWalkCurrentIndex = 0;
+
+    if (Hero == NULL)
+        return false;
+
+    if (startX < 0 || startX > 255 || startY < 0 || startY > 255)
+        return false;
+
+    if (targetX < 0 || targetX > 255 || targetY < 0 || targetY > 255)
+        return false;
+
+    if (startX == targetX && startY == targetY)
+    {
+        POINT startPoint = { startX, startY };
+        m_AutoWalkPreviewPath.push_back(startPoint);
+        return true;
+    }
+
+    EnsureAutoWalkPathfinderReady();
+
+    bool cryWolfValue = false;
+    if (M34CryWolf1st::Get_State_Only_Elf() && M34CryWolf1st::IsCyrWolf1st())
+    {
+        if (TargetNpc >= 0 && TargetNpc < MAX_CHARACTERS_CLIENT)
+        {
+            const int objectType = CharactersClient[TargetNpc].Object.Type;
+            if (objectType >= MODEL_CRYWOLF_ALTAR1 && objectType <= MODEL_CRYWOLF_ALTAR5)
+            {
+                cryWolfValue = true;
+            }
+        }
+    }
+
+    int wallFlags = TW_CHARACTER;
+    bool pathFound = g_AutoWalkPathfinder.FindPath(startX, startY, targetX, targetY, true, wallFlags, cryWolfValue, 0.0f);
+    if (pathFound == false)
+    {
+        const WORD startAttr = TerrainWall[TERRAIN_INDEX_REPEAT(startX, startY)];
+        const WORD targetAttr = TerrainWall[TERRAIN_INDEX_REPEAT(targetX, targetY)];
+
+        if (((startAttr & TW_SAFEZONE) == TW_SAFEZONE || (targetAttr & TW_SAFEZONE) == TW_SAFEZONE) &&
+            (targetAttr & TW_CHARACTER) != TW_CHARACTER)
+        {
+            wallFlags = TW_NOMOVE;
+        }
+
+        pathFound = g_AutoWalkPathfinder.FindPath(startX, startY, targetX, targetY, false, wallFlags, cryWolfValue, 0.0f);
+    }
+
+    if (pathFound == false)
+        return false;
+
+    const int fullPathLength = g_AutoWalkPathfinder.GetFullPathLength();
+    if (fullPathLength <= 1)
+        return false;
+
+    unsigned char* px = g_AutoWalkPathfinder.GetPathX();
+    unsigned char* py = g_AutoWalkPathfinder.GetPathY();
+
+    m_AutoWalkPreviewPath.reserve(fullPathLength);
+    for (int i = 0; i < fullPathLength; ++i)
+    {
+        POINT node = { px[i], py[i] };
+        m_AutoWalkPreviewPath.push_back(node);
+    }
+
+    const POINT& first = m_AutoWalkPreviewPath.front();
+    const POINT& last = m_AutoWalkPreviewPath.back();
+    if (first.x != startX || first.y != startY || last.x != targetX || last.y != targetY)
+    {
+        m_AutoWalkPreviewPath.clear();
+        return false;
+    }
+
+    return true;
+}
+
+bool SEASON3B::CNewUIMiniMap::SyncAutoWalkIndexWithHero()
+{
+    if (m_AutoWalkPreviewPath.empty() || Hero == NULL)
+        return false;
+
+    const int heroX = Hero->PositionX;
+    const int heroY = Hero->PositionY;
+
+    if (m_AutoWalkCurrentIndex >= 0 && m_AutoWalkCurrentIndex < static_cast<int>(m_AutoWalkPreviewPath.size()))
+    {
+        const POINT& currentNode = m_AutoWalkPreviewPath[m_AutoWalkCurrentIndex];
+        if (currentNode.x == heroX && currentNode.y == heroY)
+        {
+            return true;
+        }
+    }
+
+    for (size_t i = 0; i < m_AutoWalkPreviewPath.size(); ++i)
+    {
+        const POINT& node = m_AutoWalkPreviewPath[i];
+        if (node.x == heroX && node.y == heroY)
+        {
+            m_AutoWalkCurrentIndex = static_cast<int>(i);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float screenY, float& worldX, float& worldY) const
 {
     if (m_bSuccess == false || Hero == NULL)
@@ -434,4 +595,182 @@ bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float sc
     worldX = computedWorldX;
     worldY = computedWorldY;
     return true;
+}
+
+void SEASON3B::CNewUIMiniMap::StartAutoWalk(int targetX, int targetY)
+{
+    if (Hero == NULL)
+        return;
+
+    CancelAutoWalk();
+
+    if (targetX < 0) targetX = 0;
+    else if (targetX > 255) targetX = 255;
+    if (targetY < 0) targetY = 0;
+    else if (targetY > 255) targetY = 255;
+
+    if (Hero->PositionX == targetX && Hero->PositionY == targetY)
+        return;
+
+    if (BuildAutoWalkPath(Hero->PositionX, Hero->PositionY, targetX, targetY) == false)
+    {
+        if (g_pSystemLogBox)
+        {
+            g_pSystemLogBox->AddText(AUTO_WALK_FAIL_MESSAGE, SEASON3B::TYPE_ERROR_MESSAGE);
+        }
+        return;
+    }
+
+    m_AutoWalkTarget.x = targetX;
+    m_AutoWalkTarget.y = targetY;
+    m_bAutoWalkActive = true;
+    TargetX = targetX;
+    TargetY = targetY;
+
+    SyncAutoWalkIndexWithHero();
+
+    if (Hero->Movement == false)
+    {
+        TryAutoWalkStep();
+    }
+}
+
+void SEASON3B::CNewUIMiniMap::CancelAutoWalk()
+{
+    m_bAutoWalkActive = false;
+    m_AutoWalkPreviewPath.clear();
+    m_AutoWalkCurrentIndex = 0;
+}
+
+void SEASON3B::CNewUIMiniMap::UpdateAutoWalk()
+{
+    if (m_bAutoWalkActive == false || Hero == NULL)
+        return;
+
+    if (Hero->Dead > 0)
+    {
+        CancelAutoWalk();
+        return;
+    }
+
+    SyncAutoWalkIndexWithHero();
+
+    if (Hero->PositionX == m_AutoWalkTarget.x && Hero->PositionY == m_AutoWalkTarget.y)
+    {
+        CancelAutoWalk();
+        return;
+    }
+
+    if (m_AutoWalkPreviewPath.size() <= 1)
+    {
+        CancelAutoWalk();
+        return;
+    }
+
+    if (Hero->Movement)
+    {
+        return;
+    }
+
+    if (SyncAutoWalkIndexWithHero() == false)
+    {
+        if (BuildAutoWalkPath(Hero->PositionX, Hero->PositionY, m_AutoWalkTarget.x, m_AutoWalkTarget.y) == false)
+        {
+            if (g_pSystemLogBox)
+            {
+                g_pSystemLogBox->AddText(AUTO_WALK_FAIL_MESSAGE, SEASON3B::TYPE_ERROR_MESSAGE);
+            }
+            CancelAutoWalk();
+            return;
+        }
+    }
+
+    if (TryAutoWalkStep() == false)
+    {
+        CancelAutoWalk();
+    }
+}
+
+bool SEASON3B::CNewUIMiniMap::TryAutoWalkStep()
+{
+    if (m_bAutoWalkActive == false || Hero == NULL)
+        return false;
+
+    if (g_pNewUISystem && g_pNewUISystem->IsImpossibleSendMoveInterface())
+    {
+        return false;
+    }
+
+    if (SyncAutoWalkIndexWithHero() == false)
+    {
+        return false;
+    }
+
+    const size_t totalNodes = m_AutoWalkPreviewPath.size();
+    if (totalNodes <= 1 || m_AutoWalkCurrentIndex >= static_cast<int>(totalNodes - 1))
+    {
+        return false;
+    }
+
+    size_t nodesAvailable = totalNodes - static_cast<size_t>(m_AutoWalkCurrentIndex);
+    if (nodesAvailable < 2)
+    {
+        return false;
+    }
+
+    if (nodesAvailable > MAX_PATH_FIND)
+    {
+        nodesAvailable = MAX_PATH_FIND;
+    }
+
+    PATH_t& heroPath = Hero->Path;
+    heroPath.Lock.lock();
+    heroPath.PathNum = static_cast<int>(nodesAvailable);
+    heroPath.CurrentPath = 0;
+    heroPath.CurrentPathFloat = 0;
+
+    for (size_t i = 0; i < nodesAvailable; ++i)
+    {
+        const POINT& node = m_AutoWalkPreviewPath[m_AutoWalkCurrentIndex + i];
+        heroPath.PathX[i] = static_cast<unsigned char>(node.x);
+        heroPath.PathY[i] = static_cast<unsigned char>(node.y);
+    }
+    heroPath.Lock.unlock();
+
+    Hero->MovementType = MOVEMENT_MOVE;
+    TargetX = m_AutoWalkTarget.x;
+    TargetY = m_AutoWalkTarget.y;
+
+    SendMove(Hero, &Hero->Object);
+    return true;
+}
+
+void SEASON3B::CNewUIMiniMap::RenderAutoWalkPath(float centerX, float centerY, float mapWidth, float mapHeight, float rotation)
+{
+    const size_t totalNodes = m_AutoWalkPreviewPath.size();
+    if (totalNodes <= 1)
+        return;
+
+    const float markerSize = 10.f;
+    const float uv = 17.5f / 32.f;
+
+    size_t startIndex = 1;
+    if (m_AutoWalkCurrentIndex >= 0 && m_AutoWalkCurrentIndex < static_cast<int>(totalNodes))
+    {
+        startIndex = static_cast<size_t>(m_AutoWalkCurrentIndex + 1);
+    }
+
+    if (startIndex >= totalNodes)
+        return;
+
+    for (size_t i = startIndex; i < totalNodes; ++i)
+    {
+        const POINT& pt = m_AutoWalkPreviewPath[i];
+        float ty = ((float)pt.x / 256.f) * mapHeight;
+        float tx = ((float)pt.y / 256.f) * mapWidth;
+        const bool isDestination = (i == totalNodes - 1);
+        const float size = isDestination ? (markerSize + 6.f) : markerSize;
+        const int imageId = isDestination ? (IMAGE_MINIMAP_INTERFACE + 4) : (IMAGE_MINIMAP_INTERFACE + 5);
+        RenderPointRotate(imageId, tx, ty, size, size, centerX, centerY, mapWidth, mapHeight, rotation, 0.f, uv, uv);
+    }
 }

@@ -27,6 +27,7 @@ private:
     BYTE m_yPath[MAX_COUNT_PATH];
 public:
     int GetPath(void) { return (min(m_iNumPath, MAX_PATH_FIND)); }
+    int GetFullPathLength(void) const { return m_iNumPath; }
     BYTE* GetPathX(void) { return (m_xPath + MAX_COUNT_PATH - m_iNumPath); }
     BYTE* GetPathY(void) { return (m_yPath + MAX_COUNT_PATH - m_iNumPath); }
 

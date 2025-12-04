@@ -4,11 +4,14 @@
 
 #pragma once
 
+#include <vector>
+
 #include "NewUIBase.h"
 #include "NewUIManager.h"
 #include "NewUIMainFrameWindow.h"
 #include "NewUIChatLogWindow.h"
 #include "NewUIMyInventory.h"
+#include "w_CharacterInfo.h"
 
 namespace SEASON3B
 {
@@ -50,6 +53,10 @@ namespace SEASON3B
         CNewUIButton			m_BtnExit;
         MINI_MAP				m_Mini_Map_Data[MAX_MINI_MAP_DATA];
         float					m_Btn_Loc[MAX_MINI_MAP_DATA][4];
+        bool                    m_bAutoWalkActive;
+        POINT                   m_AutoWalkTarget;
+        std::vector<POINT>      m_AutoWalkPreviewPath;
+        int                     m_AutoWalkCurrentIndex;
 
     public:
         bool					m_bSuccess;
@@ -83,5 +90,12 @@ namespace SEASON3B
         bool Check_Mouse(int mx, int my);
         bool Check_Btn(int mx, int my);
         bool GetWorldPositionFromScreen(float screenX, float screenY, float& worldX, float& worldY) const;
-    };
+        void StartAutoWalk(int targetX, int targetY);
+        void CancelAutoWalk();
+        void UpdateAutoWalk();
+        bool TryAutoWalkStep();
+        bool BuildAutoWalkPath(int startX, int startY, int targetX, int targetY);
+        bool SyncAutoWalkIndexWithHero();
+        void RenderAutoWalkPath(float centerX, float centerY, float mapWidth, float mapHeight, float rotation);
+        };
 }
