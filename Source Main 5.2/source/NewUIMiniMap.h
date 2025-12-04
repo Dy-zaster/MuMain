@@ -48,7 +48,7 @@ namespace SEASON3B
         POINT					m_Pos;
         POINT					m_Width;
         POINT					m_MiniWidth;
-        POINT					m_Lenth[6];
+        POINT					m_Lenth[33];
         int						m_MiniPos;
         CNewUIButton			m_BtnExit;
         MINI_MAP				m_Mini_Map_Data[MAX_MINI_MAP_DATA];

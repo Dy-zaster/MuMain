@@ -19,6 +19,7 @@
 #include "ZzzLodTerrain.h"
 #include "ZzzPath.h"
 #include "GMCrywolf1st.h"
+#include "ZzzOpenglUtil.h"
 
 extern BYTE m_OccupationState;
 extern int TargetX;
@@ -88,19 +89,14 @@ bool SEASON3B::CNewUIMiniMap::Create(CNewUIManager* pNewUIMng, int x, int y)
 
     SetPos(x, y);
 
-    m_Lenth[0].x = 800;
-    m_Lenth[1].x = 1000;
-    m_Lenth[2].x = 1200;
-    m_Lenth[3].x = 1400;
-    m_Lenth[4].x = 1600;
-    m_Lenth[5].x = 1800;
-    m_Lenth[0].y = 800;
-    m_Lenth[1].y = 1000;
-    m_Lenth[2].y = 1200;
-    m_Lenth[3].y = 1400;
-    m_Lenth[4].y = 1600;
-    m_Lenth[5].y = 1800;
-    m_MiniPos = 0;
+    const int zoomSteps[] = { 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1350, 1400, 1450, 1500, 1550, 1600, 1650, 1700, 1750, 1800 };
+    const size_t zoomCount = sizeof(zoomSteps) / sizeof(zoomSteps[0]);
+    for (size_t i = 0; i < zoomCount; ++i)
+    {
+        m_Lenth[i].x = zoomSteps[i];
+        m_Lenth[i].y = zoomSteps[i];
+    }
+    m_MiniPos = 12;
     m_bSuccess = false;
     return true;
 }
@@ -175,8 +171,11 @@ bool SEASON3B::CNewUIMiniMap::Render()
     EnableAlphaTest();
     glColor4f(1.f, 1.f, 1.f, 1.f);
 
-    auto Ty = (float)(((float)Hero->PositionX / 256.f) * m_Lenth[m_MiniPos].y);
-    auto Tx = (float)(((float)Hero->PositionY / 256.f) * m_Lenth[m_MiniPos].x);
+    const float mapScaleX = static_cast<float>(m_Lenth[m_MiniPos].x);
+    const float mapScaleY = static_cast<float>(m_Lenth[m_MiniPos].y);
+
+    auto Ty = (float)(((float)Hero->PositionX / 256.f) * mapScaleY);
+    auto Tx = (float)(((float)Hero->PositionY / 256.f) * mapScaleX);
     float Ty1;
     float Tx1;
     float uvxy = (41.7f / 64.f);
@@ -186,7 +185,7 @@ bool SEASON3B::CNewUIMiniMap::Render()
     float Rot_Loc = 45.f;
     int i = 0;
 
-    RenderBitRotate(IMAGE_MINIMAP_INTERFACE, m_Lenth[m_MiniPos].x - Tx, m_Lenth[m_MiniPos].y - Ty, m_Lenth[m_MiniPos].x, m_Lenth[m_MiniPos].y, Rot);
+    RenderBitRotate(IMAGE_MINIMAP_INTERFACE, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot);
 
     int NpcWidth = 15;
     int NpcWidthP = 30;
@@ -194,18 +193,18 @@ bool SEASON3B::CNewUIMiniMap::Render()
     {
         if (m_Mini_Map_Data[i].Kind > 0)
         {
-            Ty1 = (float)(((float)m_Mini_Map_Data[i].Location[0] / 256.f) * m_Lenth[m_MiniPos].y);
-            Tx1 = (float)(((float)m_Mini_Map_Data[i].Location[1] / 256.f) * m_Lenth[m_MiniPos].x);
+            Ty1 = (float)(((float)m_Mini_Map_Data[i].Location[0] / 256.f) * mapScaleY);
+            Tx1 = (float)(((float)m_Mini_Map_Data[i].Location[1] / 256.f) * mapScaleX);
             Rot_Loc = (float)m_Mini_Map_Data[i].Rotation;
 
             if (m_Mini_Map_Data[i].Kind == 1) //npc
             {
                 if (!(gMapManager.WorldActive == WD_34CRYWOLF_1ST && m_OccupationState > 0) || (m_Mini_Map_Data[i].Location[0] == 228 && m_Mini_Map_Data[i].Location[1] == 48 && gMapManager.WorldActive == WD_34CRYWOLF_1ST))
-                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 5, Tx1, Ty1, NpcWidth, NpcWidth, m_Lenth[m_MiniPos].x - Tx, m_Lenth[m_MiniPos].y - Ty, m_Lenth[m_MiniPos].x, m_Lenth[m_MiniPos].y, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, i);
+                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 5, Tx1, Ty1, NpcWidth, NpcWidth, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, i);
             }
             else
                 if (m_Mini_Map_Data[i].Kind == 2)
-                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 4, Tx1, Ty1, NpcWidthP, NpcWidthP, m_Lenth[m_MiniPos].x - Tx, m_Lenth[m_MiniPos].y - Ty, m_Lenth[m_MiniPos].x, m_Lenth[m_MiniPos].y, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, 100 + i);
+                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 4, Tx1, Ty1, NpcWidthP, NpcWidthP, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, 100 + i);
         }
         else
             break;
@@ -214,12 +213,12 @@ bool SEASON3B::CNewUIMiniMap::Render()
     if (m_bAutoWalkActive && m_AutoWalkPreviewPath.size() > 1)
     {
         glColor4f(0.f, 0.85f, 1.f, 0.85f);
-        RenderAutoWalkPath(m_Lenth[m_MiniPos].x - Tx, m_Lenth[m_MiniPos].y - Ty, m_Lenth[m_MiniPos].x, m_Lenth[m_MiniPos].y, Rot);
+        RenderAutoWalkPath(mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot);
         glColor4f(1.f, 1.f, 1.f, 1.f);
     }
 
     float Ch_wid = 12;
-    RenderImage(IMAGE_MINIMAP_INTERFACE + 3, 325, 230, Ch_wid, Ch_wid, 0.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
+    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 3, Tx, Ty, Ch_wid, Ch_wid, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, 0.f, 17.5f / 32.f, 17.5f / 32.f);
 
     for (i = 0; i < 25; i++)
     {
@@ -293,6 +292,8 @@ bool SEASON3B::CNewUIMiniMap::Update()
 
 void SEASON3B::CNewUIMiniMap::LoadImages(const wchar_t* Filename)
 {
+    CancelAutoWalk();
+
     wchar_t Fname[300];
     int i = 0;
     swprintf(Fname, L"Data\\%s\\mini_map.ozt", Filename);
@@ -381,6 +382,22 @@ bool SEASON3B::CNewUIMiniMap::UpdateMouseEvent()
 
     const bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
     const bool cursorInMiniMap = CheckMouseIn(0, 0, 640, 430);
+
+    if (cursorInMiniMap && MouseWheel != 0)
+    {
+        const int maxZoomIndex = static_cast<int>((sizeof(m_Lenth) / sizeof(m_Lenth[0])) - 1);
+
+        if (MouseWheel > 0 && m_MiniPos > 0)
+        {
+            --m_MiniPos;
+        }
+        else if (MouseWheel < 0 && m_MiniPos < maxZoomIndex)
+        {
+            ++m_MiniPos;
+        }
+
+        MouseWheel = 0;
+    }
 
     if (shiftHeld && cursorInMiniMap)
     {
@@ -608,8 +625,8 @@ bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float sc
     if (mapWidth <= 0.f || mapHeight <= 0.f)
         return false;
 
-    const float heroMapX = ((float)Hero->PositionY / 256.f) * mapWidth;
-    const float heroMapY = ((float)Hero->PositionX / 256.f) * mapHeight;
+    const float mapCenterX = mapWidth * 0.5f;
+    const float mapCenterY = mapHeight * 0.5f;
     const float windowWidthF = static_cast<float>(WindowWidth);
     const float windowHeightF = static_cast<float>(WindowHeight);
 
@@ -623,10 +640,13 @@ bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float sc
     const float actualX = screenX * windowWidthF / 640.f;
     const float actualYFromBottom = (480.f - screenY) * windowHeightF / 480.f;
 
+    const float mapCenterOffsetX = 25.f;
+    const float mapCenterOffsetY = 0.f;
+
     vec3_t cursorVector =
     {
-        (actualX - (windowWidthF * 0.5f)) - 25.f,
-        actualYFromBottom - (windowHeightF * 0.5f),
+        (actualX - (windowWidthF * 0.5f)) - mapCenterOffsetX,
+        (actualYFromBottom - (windowHeightF * 0.5f)) - mapCenterOffsetY,
         0.f
     };
 
@@ -636,8 +656,8 @@ bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float sc
     const float mapDiffX = unrotatedVector[0] * (640.f / windowWidthF);
     const float mapDiffY = unrotatedVector[1] * (480.f / windowHeightF);
 
-    const float mapX = heroMapX + mapDiffX;
-    const float mapY = heroMapY - mapDiffY;
+    const float mapX = mapCenterX + mapDiffX;
+    const float mapY = mapCenterY - mapDiffY;
 
     float computedWorldX = (mapY / mapHeight) * 256.f;
     float computedWorldY = (mapX / mapWidth) * 256.f;
