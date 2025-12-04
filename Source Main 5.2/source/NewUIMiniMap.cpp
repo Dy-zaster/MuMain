@@ -194,6 +194,31 @@ bool SEASON3B::CNewUIMiniMap::Render()
 
     m_BtnExit.Render(true);
 
+    if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) && CheckMouseIn(0, 0, 640, 430))
+    {
+        float worldX = 0.f;
+        float worldY = 0.f;
+        if (GetWorldPositionFromScreen(static_cast<float>(MouseX), static_cast<float>(MouseY), worldX, worldY))
+        {
+            const int coordX = static_cast<int>(worldX + 0.5f);
+            const int coordY = static_cast<int>(worldY + 0.5f);
+
+            wchar_t coordBuffer[64];
+            swprintf(coordBuffer, L"X: %d  Y: %d", coordX, coordY);
+
+            const DWORD backupTextColor = g_pRenderText->GetTextColor();
+            const DWORD backupBgColor = g_pRenderText->GetBgColor();
+
+            g_pRenderText->SetFont(g_hFont);
+            g_pRenderText->SetTextColor(RGBA(255, 255, 255, 255));
+            g_pRenderText->SetBgColor(RGBA(0, 0, 0, 160));
+            g_pRenderText->RenderText(0, 8, coordBuffer, 640, 0, RT3_SORT_CENTER);
+
+            g_pRenderText->SetTextColor(backupTextColor);
+            g_pRenderText->SetBgColor(backupBgColor);
+        }
+    }
+
     DisableAlphaBlend();
 
     Check_Btn(MouseX, MouseY);
@@ -354,4 +379,59 @@ bool SEASON3B::CNewUIMiniMap::Check_Btn(int mx, int my)
             break;
     }
     return false;
+}
+
+bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float screenY, float& worldX, float& worldY) const
+{
+    if (m_bSuccess == false || Hero == NULL)
+        return false;
+
+    const float mapWidth = static_cast<float>(m_Lenth[m_MiniPos].x);
+    const float mapHeight = static_cast<float>(m_Lenth[m_MiniPos].y);
+
+    if (mapWidth <= 0.f || mapHeight <= 0.f)
+        return false;
+
+    const float heroMapX = ((float)Hero->PositionY / 256.f) * mapWidth;
+    const float heroMapY = ((float)Hero->PositionX / 256.f) * mapHeight;
+    const float windowWidthF = static_cast<float>(WindowWidth);
+    const float windowHeightF = static_cast<float>(WindowHeight);
+
+    if (windowWidthF <= 0.f || windowHeightF <= 0.f)
+        return false;
+
+    vec3_t angle = { 0.f, 0.f, -45.f };
+    float rotationMatrix[3][4];
+    AngleMatrix(angle, rotationMatrix);
+
+    const float actualX = screenX * windowWidthF / 640.f;
+    const float actualYFromBottom = (480.f - screenY) * windowHeightF / 480.f;
+
+    vec3_t cursorVector =
+    {
+        (actualX - (windowWidthF * 0.5f)) - 25.f,
+        actualYFromBottom - (windowHeightF * 0.5f),
+        0.f
+    };
+
+    vec3_t unrotatedVector;
+    VectorRotate(cursorVector, rotationMatrix, unrotatedVector);
+
+    const float mapDiffX = unrotatedVector[0] * (640.f / windowWidthF);
+    const float mapDiffY = unrotatedVector[1] * (480.f / windowHeightF);
+
+    const float mapX = heroMapX + mapDiffX;
+    const float mapY = heroMapY - mapDiffY;
+
+    float computedWorldX = (mapY / mapHeight) * 256.f;
+    float computedWorldY = (mapX / mapWidth) * 256.f;
+
+    if (computedWorldX < 0.f) computedWorldX = 0.f;
+    if (computedWorldX > 255.f) computedWorldX = 255.f;
+    if (computedWorldY < 0.f) computedWorldY = 0.f;
+    if (computedWorldY > 255.f) computedWorldY = 255.f;
+
+    worldX = computedWorldX;
+    worldY = computedWorldY;
+    return true;
 }
