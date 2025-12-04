@@ -49,6 +49,43 @@ namespace
             g_AutoWalkPathfinderReady = true;
         }
     }
+
+    constexpr float FIELD_MINIMAP_SIZE = 170.f;
+    constexpr float FIELD_MINIMAP_MARGIN = 12.f;
+    constexpr float FIELD_MINIMAP_PADDING = 8.f;
+    constexpr float FIELD_MINIMAP_TEXT_HEIGHT = 18.f;
+    class FieldMiniMapTransformGuard
+    {
+    public:
+        FieldMiniMapTransformGuard(float mapX, float mapY, float mapSize)
+        {
+            glGetIntegerv(GL_MATRIX_MODE, &m_PreviousMatrixMode);
+            glMatrixMode(GL_MODELVIEW);
+            glPushMatrix();
+
+            const float halfSize = mapSize * 0.5f;
+            const float centerX = mapX + halfSize;
+            const float centerY = mapY + halfSize;
+            const float windowWidthF = static_cast<float>(WindowWidth);
+            const float windowHeightF = static_cast<float>(WindowHeight);
+            const float scaledCenterX = centerX * (windowWidthF / 640.f);
+            const float scaledCenterY = centerY * (windowHeightF / 480.f);
+            const float targetX = scaledCenterX;
+            const float targetY = windowHeightF - scaledCenterY;
+
+            glTranslatef(targetX - (windowWidthF * 0.5f), targetY - (windowHeightF * 0.5f), 0.f);
+        }
+
+        ~FieldMiniMapTransformGuard()
+        {
+            glMatrixMode(GL_MODELVIEW);
+            glPopMatrix();
+            glMatrixMode(m_PreviousMatrixMode);
+        }
+
+    private:
+        GLint m_PreviousMatrixMode;
+    };
 }
 
 static const wchar_t AUTO_WALK_FAIL_MESSAGE[] = L"No hay un camino disponible hacia ese punto.";
@@ -61,6 +98,7 @@ SEASON3B::CNewUIMiniMap::CNewUIMiniMap()
     m_AutoWalkTarget.y = 0;
     m_AutoWalkPreviewPath.clear();
     m_AutoWalkCurrentIndex = 0;
+    m_MiniMapCount = 0;
 }
 
 SEASON3B::CNewUIMiniMap::~CNewUIMiniMap()
@@ -98,6 +136,7 @@ bool SEASON3B::CNewUIMiniMap::Create(CNewUIManager* pNewUIMng, int x, int y)
     }
     m_MiniPos = 12;
     m_bSuccess = false;
+    m_MiniMapCount = 0;
     return true;
 }
 
@@ -293,6 +332,7 @@ bool SEASON3B::CNewUIMiniMap::Update()
 void SEASON3B::CNewUIMiniMap::LoadImages(const wchar_t* Filename)
 {
     CancelAutoWalk();
+    m_MiniMapCount = 0;
 
     wchar_t Fname[300];
     int i = 0;
@@ -302,6 +342,7 @@ void SEASON3B::CNewUIMiniMap::LoadImages(const wchar_t* Filename)
     if (pFile == NULL)
     {
         m_bSuccess = false;
+        m_MiniMapCount = 0;
         return;
     }
     else
@@ -354,6 +395,10 @@ void SEASON3B::CNewUIMiniMap::LoadImages(const wchar_t* Filename)
                 memcpy(target, pSeek, Size);
 
                 CMultiLanguage::ConvertFromUtf8(target->Name, current.Name);
+                if (target->Kind > 0)
+                {
+                    ++m_MiniMapCount;
+                }
                 /*int wchars_num = MultiByteToWideChar(CP_UTF8, 0, current.Name, -1, NULL, 0);
                 MultiByteToWideChar(CP_UTF8, 0, current.Name, -1, target->Name, wchars_num);
                 target->Name[wchars_num] = L'\0';*/
@@ -368,6 +413,8 @@ void SEASON3B::CNewUIMiniMap::LoadImages(const wchar_t* Filename)
 void SEASON3B::CNewUIMiniMap::UnloadImages()
 {
     DeleteBitmap(IMAGE_MINIMAP_INTERFACE);
+    m_bSuccess = false;
+    m_MiniMapCount = 0;
 }
 
 bool SEASON3B::CNewUIMiniMap::UpdateMouseEvent()
@@ -892,4 +939,273 @@ void SEASON3B::CNewUIMiniMap::RenderAutoWalkPath(float centerX, float centerY, f
         const int imageId = isDestination ? (IMAGE_MINIMAP_INTERFACE + 4) : (IMAGE_MINIMAP_INTERFACE + 5);
         RenderPointRotate(imageId, tx, ty, size, size, centerX, centerY, mapWidth, mapHeight, rotation, 0.f, uv, uv);
     }
+}
+
+bool SEASON3B::CNewUIMiniMap::HasValidMiniMap() const
+{
+    return m_bSuccess;
+}
+
+const MINI_MAP* SEASON3B::CNewUIMiniMap::GetMiniMapData() const
+{
+    return m_Mini_Map_Data;
+}
+
+int SEASON3B::CNewUIMiniMap::GetMiniMapDataCount() const
+{
+    return m_MiniMapCount;
+}
+
+int SEASON3B::CNewUIMiniMap::GetMiniMapTextureId() const
+{
+    return IMAGE_MINIMAP_INTERFACE;
+}
+
+CNewUIFieldMiniMap::CNewUIFieldMiniMap()
+{
+    m_pNewUIMng = nullptr;
+    m_pMiniMap = nullptr;
+}
+
+CNewUIFieldMiniMap::~CNewUIFieldMiniMap()
+{
+    Release();
+}
+
+bool CNewUIFieldMiniMap::Create(CNewUIManager* pNewUIMng, CNewUIMiniMap* pMiniMap)
+{
+    if (pNewUIMng == nullptr || pMiniMap == nullptr)
+    {
+        return false;
+    }
+
+    m_pNewUIMng = pNewUIMng;
+    m_pMiniMap = pMiniMap;
+    m_pNewUIMng->AddUIObj(SEASON3B::INTERFACE_FIELD_MINI_MAP, this);
+    Show(true);
+    Enable(true);
+    return true;
+}
+
+void CNewUIFieldMiniMap::Release()
+{
+    if (m_pNewUIMng != nullptr)
+    {
+        m_pNewUIMng->RemoveUIObj(this);
+        m_pNewUIMng = nullptr;
+    }
+    m_pMiniMap = nullptr;
+}
+
+bool CNewUIFieldMiniMap::UpdateMouseEvent()
+{
+    return true;
+}
+
+bool CNewUIFieldMiniMap::UpdateKeyEvent()
+{
+    return true;
+}
+
+bool CNewUIFieldMiniMap::Update()
+{
+    return true;
+}
+
+bool CNewUIFieldMiniMap::Render()
+{
+    if (m_pMiniMap == nullptr)
+    {
+        return true;
+    }
+
+    const float frameX = GetFrameX();
+    const float frameY = GetFrameY();
+    const float frameSize = GetMapSize();
+    const float mapPadding = FIELD_MINIMAP_PADDING;
+    const float mapSize = frameSize - (mapPadding * 2.f);
+    const float mapX = frameX + mapPadding;
+    const float mapY = frameY + mapPadding;
+
+    EnableAlphaTest();
+    RenderMiniMapFrame(frameX, frameY, frameSize, frameSize);
+    EndRenderColor();
+    glColor4f(1.f, 1.f, 1.f, 1.f);
+    EnableAlphaTest();
+
+    if (m_pMiniMap->HasValidMiniMap())
+    {
+        RenderMiniMapContents(mapX, mapY, mapSize);
+        RenderMarkers(mapX, mapY, mapSize);
+        RenderHeroMarker(mapX, mapY, mapSize);
+    }
+    else
+    {
+        RenderUnavailableText(mapX, mapY, mapSize, mapSize);
+    }
+
+    RenderCoordinateInfo(frameX, frameY - FIELD_MINIMAP_TEXT_HEIGHT, frameSize);
+
+    DisableAlphaBlend();
+
+    return true;
+}
+
+float CNewUIFieldMiniMap::GetLayerDepth()
+{
+    return 1.15f;
+}
+
+void CNewUIFieldMiniMap::OpenningProcess()
+{
+    Show(true);
+}
+
+void CNewUIFieldMiniMap::ClosingProcess()
+{
+    Show(false);
+}
+
+void CNewUIFieldMiniMap::RenderMiniMapFrame(float frameX, float frameY, float frameWidth, float frameHeight) const
+{
+    const float outerPadding = FIELD_MINIMAP_PADDING;
+    RenderColor(frameX - outerPadding, frameY - outerPadding, frameWidth + outerPadding * 2.f, frameHeight + outerPadding * 2.f, 0.55f, 0);
+
+    const float borderThickness = 2.f;
+    RenderColor(frameX - borderThickness, frameY - borderThickness, frameWidth + borderThickness * 2.f, borderThickness, 0.f, 0);
+    RenderColor(frameX - borderThickness, frameY + frameHeight, frameWidth + borderThickness * 2.f, borderThickness, 0.f, 0);
+    RenderColor(frameX - borderThickness, frameY - borderThickness, borderThickness, frameHeight + borderThickness * 2.f, 0.f, 0);
+    RenderColor(frameX + frameWidth, frameY - borderThickness, borderThickness, frameHeight + borderThickness * 2.f, 0.f, 0);
+}
+
+void CNewUIFieldMiniMap::RenderMiniMapContents(float mapX, float mapY, float mapSize) const
+{
+    FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
+    const float mapScale = mapSize;
+    const float centerCoord = mapScale * 0.5f;
+    RenderBitRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE, centerCoord, centerCoord, mapScale, mapScale, 45.f);
+}
+
+void CNewUIFieldMiniMap::RenderHeroMarker(float mapX, float mapY, float mapSize) const
+{
+    if (Hero == NULL)
+    {
+        return;
+    }
+
+    FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
+
+    const float mapScaleX = mapSize;
+    const float mapScaleY = mapSize;
+    const float heroTy = (static_cast<float>(Hero->PositionX) / 256.f) * mapScaleY;
+    const float heroTx = (static_cast<float>(Hero->PositionY) / 256.f) * mapScaleX;
+    const float centerCoordX = mapScaleX * 0.5f;
+    const float centerCoordY = mapScaleY * 0.5f;
+    const float iconSize = 12.f;
+    RenderPointRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 3, heroTx, heroTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 45.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
+}
+
+void CNewUIFieldMiniMap::RenderMarkers(float mapX, float mapY, float mapSize) const
+{
+    const MINI_MAP* data = m_pMiniMap->GetMiniMapData();
+    int markerCount = m_pMiniMap->GetMiniMapDataCount();
+    if (markerCount > MAX_MINI_MAP_DATA)
+    {
+        markerCount = MAX_MINI_MAP_DATA;
+    }
+
+    if (markerCount <= 0)
+    {
+        return;
+    }
+
+    FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
+
+    const float mapScaleX = mapSize;
+    const float mapScaleY = mapSize;
+    const float centerCoordX = mapScaleX * 0.5f;
+    const float centerCoordY = mapScaleY * 0.5f;
+
+    for (int i = 0; i < markerCount; ++i)
+    {
+        const MINI_MAP& entry = data[i];
+        if (entry.Kind <= 0)
+        {
+            continue;
+        }
+
+        const float markerTy = (static_cast<float>(entry.Location[0]) / 256.f) * mapScaleY;
+        const float markerTx = (static_cast<float>(entry.Location[1]) / 256.f) * mapScaleX;
+
+        int textureId = CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 5;
+        float iconSize = 10.f;
+        if (entry.Kind == 2)
+        {
+            textureId = CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 4;
+            iconSize = 12.f;
+        }
+
+        RenderPointRotate(textureId, markerTx, markerTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 45.f, static_cast<float>(entry.Rotation), 17.5f / 32.f, 17.5f / 32.f);
+    }
+}
+
+void CNewUIFieldMiniMap::RenderCoordinateInfo(float frameX, float frameY, float frameWidth) const
+{
+    const wchar_t* mapName = gMapManager.GetMapName(gMapManager.WorldActive);
+    if (mapName == nullptr)
+    {
+        mapName = L"";
+    }
+
+    int heroX = 0;
+    int heroY = 0;
+    if (Hero != NULL)
+    {
+        heroX = Hero->PositionX;
+        heroY = Hero->PositionY;
+    }
+
+    wchar_t buffer[128];
+    swprintf(buffer, L"%s  X:%d  Y:%d", mapName, heroX, heroY);
+
+    const DWORD backupTextColor = g_pRenderText->GetTextColor();
+    const DWORD backupBgColor = g_pRenderText->GetBgColor();
+
+    g_pRenderText->SetFont(g_hFont);
+    g_pRenderText->SetTextColor(RGBA(255, 255, 255, 255));
+    g_pRenderText->SetBgColor(RGBA(0, 0, 0, 140));
+    g_pRenderText->RenderText(frameX - 6.f, frameY, buffer, frameWidth + 12.f, 0, RT3_SORT_CENTER);
+
+    g_pRenderText->SetTextColor(backupTextColor);
+    g_pRenderText->SetBgColor(backupBgColor);
+}
+
+void CNewUIFieldMiniMap::RenderUnavailableText(float frameX, float frameY, float frameWidth, float frameHeight) const
+{
+    const wchar_t unavailableText[] = L"Minimapa no disponible";
+    const DWORD backupTextColor = g_pRenderText->GetTextColor();
+    const DWORD backupBgColor = g_pRenderText->GetBgColor();
+
+    g_pRenderText->SetFont(g_hFont);
+    g_pRenderText->SetTextColor(RGBA(255, 220, 220, 255));
+    g_pRenderText->SetBgColor(RGBA(0, 0, 0, 160));
+    g_pRenderText->RenderText(frameX + 10.f, frameY + (frameHeight * 0.5f) - 8.f, unavailableText, frameWidth - 20.f, 0, RT3_SORT_CENTER);
+
+    g_pRenderText->SetTextColor(backupTextColor);
+    g_pRenderText->SetBgColor(backupBgColor);
+}
+
+float CNewUIFieldMiniMap::GetFrameX() const
+{
+    return 640.f - FIELD_MINIMAP_MARGIN - GetMapSize();
+}
+
+float CNewUIFieldMiniMap::GetFrameY() const
+{
+    return 480.f - FIELD_MINIMAP_MARGIN - GetMapSize();
+}
+
+float CNewUIFieldMiniMap::GetMapSize() const
+{
+    return FIELD_MINIMAP_SIZE;
 }

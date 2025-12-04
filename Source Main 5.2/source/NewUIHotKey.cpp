@@ -270,6 +270,21 @@ bool SEASON3B::CNewUIHotKey::UpdateKeyEvent()
 
         return false;
     }
+    else if (SEASON3B::IsPress('N') == true)
+    {
+        if (g_pNewUIMiniMap->m_bSuccess == false)
+        {
+            if (g_pSystemLogBox)
+            {
+                g_pSystemLogBox->AddText(L"Minimapa no disponible.", SEASON3B::TYPE_SYSTEM_MESSAGE);
+            }
+            return false;
+        }
+
+        g_pNewUISystem->Toggle(SEASON3B::INTERFACE_FIELD_MINI_MAP);
+        PlayBuffer(SOUND_CLICK01);
+        return false;
+    }
     else if (SEASON3B::IsPress(VK_TAB) == true && gMapManager.InBattleCastle() == true)
     {
         g_pNewUISystem->Toggle(SEASON3B::INTERFACE_SIEGEWARFARE);

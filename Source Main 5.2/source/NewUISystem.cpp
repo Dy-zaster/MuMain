@@ -79,6 +79,7 @@ CNewUISystem::CNewUISystem()
     m_pNewEmpireGuardianNPC = nullptr;
     m_pNewEmpireGuardianTimer = nullptr;
     m_pNewMiniMap = nullptr;
+    m_pNewFieldMiniMap = nullptr;
 #ifdef PBG_MOD_STAMINA_UI
     m_pNewUIStamina = NULL;
 #endif //PBG_MOD_STAMINA_UI
@@ -401,6 +402,10 @@ bool CNewUISystem::LoadMainSceneInterface()
     if (m_pNewMiniMap->Create(m_pNewUIMng, 0, 0) == false)
         return false;
 
+    m_pNewFieldMiniMap = new CNewUIFieldMiniMap;
+    if (m_pNewFieldMiniMap->Create(m_pNewUIMng, m_pNewMiniMap) == false)
+        return false;
+
     m_pNewGoldBowman = new CNewUIGoldBowmanWindow;
     if (m_pNewGoldBowman->Create(m_pNewUIMng, 640 - 190, 0) == false)
         return false;
@@ -571,6 +576,7 @@ void CNewUISystem::UnloadMainSceneInterface()
     SAFE_DELETE(m_pNewEmpireGuardianNPC);
     SAFE_DELETE(m_pNewEmpireGuardianTimer);
     SAFE_DELETE(m_pNewMiniMap);
+    SAFE_DELETE(m_pNewFieldMiniMap);
     SAFE_DELETE(m_pNewItemMng);
 #ifdef PBG_MOD_STAMINA_UI
     SAFE_DELETE(m_pNewUIStamina);
@@ -1071,6 +1077,13 @@ void CNewUISystem::Show(DWORD dwKey)
     {
         m_pNewMiniMap->OpenningProcess();
     }
+    else if (dwKey == INTERFACE_FIELD_MINI_MAP)
+    {
+        if (m_pNewFieldMiniMap)
+        {
+            m_pNewFieldMiniMap->OpenningProcess();
+        }
+    }
     else if (dwKey == INTERFACE_GENSRANKING)
     {
         HideAllGroupA();
@@ -1483,6 +1496,13 @@ void CNewUISystem::Hide(DWORD dwKey)
     {
         m_pNewMiniMap->ClosingProcess();
     }
+    else if (dwKey == INTERFACE_FIELD_MINI_MAP)
+    {
+        if (m_pNewFieldMiniMap)
+        {
+            m_pNewFieldMiniMap->ClosingProcess();
+        }
+    }
     else if (dwKey == INTERFACE_GENSRANKING)
     {
         g_pNewUIGensRanking->ClosingProcess();
@@ -1827,6 +1847,7 @@ bool CNewUISystem::IsImpossibleHideInterface(DWORD dwKey)
         || dwKey == INTERFACE_HERO_POSITION_INFO
         || dwKey == INTERFACE_NAME_WINDOW
         || dwKey == INTERFACE_SIEGEWARFARE
+        || dwKey == INTERFACE_FIELD_MINI_MAP
         || dwKey == INTERFACE_ITEM_TOOLTIP
         || dwKey == INTERFACE_HOTKEY
         || dwKey == INTERFACE_CURSEDTEMPLE_GAMESYSTEM
@@ -2251,6 +2272,11 @@ CNewUIExchangeLuckyCoin* CNewUISystem::GetUI_pNewExchangeLuckyCoin() const
 CNewUIMiniMap* CNewUISystem::GetUI_pNewUIMiniMap() const
 {
     return m_pNewMiniMap;
+}
+
+CNewUIFieldMiniMap* CNewUISystem::GetUI_FieldMiniMap() const
+{
+    return m_pNewFieldMiniMap;
 }
 
 CNewUIDuelWatchWindow* CNewUISystem::GetUI_pNewDuelWatch() const

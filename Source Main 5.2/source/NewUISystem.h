@@ -210,6 +210,7 @@ namespace SEASON3B
         CNewUIEmpireGuardianNPC* m_pNewEmpireGuardianNPC;
         CNewUIEmpireGuardianTimer* m_pNewEmpireGuardianTimer;
         CNewUIMiniMap* m_pNewMiniMap;
+        CNewUIFieldMiniMap* m_pNewFieldMiniMap;
         CNewUIGensRanking* m_pNewGensRanking;
         CNewUIUnitedMarketPlaceWindow* m_pNewUnitedMarketPlaceWindow;
         CNewUILuckyItemWnd* m_pNewUILuckyItemWnd;
@@ -290,6 +291,7 @@ namespace SEASON3B
         CNewUIEmpireGuardianNPC* GetUI_pNewEmpireGuardianNPC() const;
         CNewUIEmpireGuardianTimer* GetUI_pNewEmpireGuardianTimer() const;
         CNewUIMiniMap* GetUI_pNewUIMiniMap() const;
+        CNewUIFieldMiniMap* GetUI_FieldMiniMap() const;
         CNewUIGensRanking* GetUI_NewGensRanking() const;
         CNewUIUnitedMarketPlaceWindow* GetUI_pNewUnitedMarketPlaceWindow() const;
         //CNewUIUnitedMarketPlaceWindow*	GetUI_pNewUnitedMarketPlaceFrame() const;
@@ -377,6 +379,7 @@ namespace SEASON3B
 #define g_pEmpireGuardianNPC SEASON3B::CNewUISystem::GetInstance()->GetUI_pNewEmpireGuardianNPC()
 #define g_pEmpireGuardianTimer SEASON3B::CNewUISystem::GetInstance()->GetUI_pNewEmpireGuardianTimer()
 #define g_pNewUIMiniMap SEASON3B::CNewUISystem::GetInstance()->GetUI_pNewUIMiniMap()
+#define g_pFieldMiniMap SEASON3B::CNewUISystem::GetInstance()->GetUI_FieldMiniMap()
 #ifdef PBG_MOD_STAMINA_UI
 #define g_pNewUIStamina SEASON3B::CNewUISystem::GetInstance()->GetUI_pNewUIStamina()
 #endif //PBG_MOD_STAMINA_UI

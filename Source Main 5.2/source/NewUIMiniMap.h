@@ -53,6 +53,7 @@ namespace SEASON3B
         CNewUIButton			m_BtnExit;
         MINI_MAP				m_Mini_Map_Data[MAX_MINI_MAP_DATA];
         float					m_Btn_Loc[MAX_MINI_MAP_DATA][4];
+        int                     m_MiniMapCount;
         bool                    m_bAutoWalkActive;
         POINT                   m_AutoWalkTarget;
         std::vector<POINT>      m_AutoWalkPreviewPath;
@@ -82,6 +83,10 @@ namespace SEASON3B
         CNewUIButton m_BtnToolTip;
         void LoadImages(const wchar_t* Filename);
         void UnloadImages();
+        bool HasValidMiniMap() const;
+        const MINI_MAP* GetMiniMapData() const;
+        int GetMiniMapDataCount() const;
+        int GetMiniMapTextureId() const;
 
     private:
         void Render_Text();
@@ -99,4 +104,38 @@ namespace SEASON3B
         bool SyncAutoWalkIndexWithHero();
         void RenderAutoWalkPath(float centerX, float centerY, float mapWidth, float mapHeight, float rotation);
         };
+
+    class CNewUIFieldMiniMap : public CNewUIObj
+    {
+    public:
+        CNewUIFieldMiniMap();
+        virtual ~CNewUIFieldMiniMap();
+
+        bool Create(CNewUIManager* pNewUIMng, CNewUIMiniMap* pMiniMap);
+        void Release();
+
+        bool UpdateMouseEvent() override;
+        bool UpdateKeyEvent() override;
+        bool Update() override;
+        bool Render() override;
+
+        float GetLayerDepth() override;
+
+        void OpenningProcess();
+        void ClosingProcess();
+
+    private:
+        void RenderMiniMapFrame(float frameX, float frameY, float frameWidth, float frameHeight) const;
+        void RenderMiniMapContents(float mapX, float mapY, float mapSize) const;
+        void RenderHeroMarker(float mapX, float mapY, float mapSize) const;
+        void RenderMarkers(float mapX, float mapY, float mapSize) const;
+        void RenderCoordinateInfo(float frameX, float frameY, float frameWidth) const;
+        void RenderUnavailableText(float frameX, float frameY, float frameWidth, float frameHeight) const;
+        float GetFrameX() const;
+        float GetFrameY() const;
+        float GetMapSize() const;
+
+        CNewUIManager* m_pNewUIMng;
+        CNewUIMiniMap* m_pMiniMap;
+    };
 }
