@@ -54,6 +54,7 @@ namespace
     constexpr float FIELD_MINIMAP_MARGIN = 12.f;
     constexpr float FIELD_MINIMAP_PADDING = 8.f;
     constexpr float FIELD_MINIMAP_TEXT_HEIGHT = 18.f;
+    constexpr float FIELD_MINIMAP_VERTICAL_OFFSET = 48.f;
     class FieldMiniMapTransformGuard
     {
     public:
@@ -199,7 +200,6 @@ bool SEASON3B::CNewUIMiniMap::UpdateKeyEvent()
 
 bool SEASON3B::CNewUIMiniMap::Render()
 {
-    float Rot = 45.f;
 
     if (m_bSuccess == false)
         return m_bSuccess;
@@ -221,10 +221,10 @@ bool SEASON3B::CNewUIMiniMap::Render()
     float uvxy_Line = 8.f / 8.f;
     float Ui_wid = 35.f;
     float Ui_Hig = 6.f;
-    float Rot_Loc = 45.f;
+    float Rot_Loc = 0.f;
     int i = 0;
 
-    RenderBitRotate(IMAGE_MINIMAP_INTERFACE, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot);
+    RenderBitRotate(IMAGE_MINIMAP_INTERFACE, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f);
 
     int NpcWidth = 15;
     int NpcWidthP = 30;
@@ -239,11 +239,11 @@ bool SEASON3B::CNewUIMiniMap::Render()
             if (m_Mini_Map_Data[i].Kind == 1) //npc
             {
                 if (!(gMapManager.WorldActive == WD_34CRYWOLF_1ST && m_OccupationState > 0) || (m_Mini_Map_Data[i].Location[0] == 228 && m_Mini_Map_Data[i].Location[1] == 48 && gMapManager.WorldActive == WD_34CRYWOLF_1ST))
-                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 5, Tx1, Ty1, NpcWidth, NpcWidth, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, i);
+                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 5, Tx1, Ty1, NpcWidth, NpcWidth, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, i);
             }
             else
                 if (m_Mini_Map_Data[i].Kind == 2)
-                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 4, Tx1, Ty1, NpcWidthP, NpcWidthP, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, 100 + i);
+                    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 4, Tx1, Ty1, NpcWidthP, NpcWidthP, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f, Rot_Loc, 17.5f / 32.f, 17.5f / 32.f, 100 + i);
         }
         else
             break;
@@ -252,12 +252,12 @@ bool SEASON3B::CNewUIMiniMap::Render()
     if (m_bAutoWalkActive && m_AutoWalkPreviewPath.size() > 1)
     {
         glColor4f(0.f, 0.85f, 1.f, 0.85f);
-        RenderAutoWalkPath(mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot);
+        RenderAutoWalkPath(mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f);
         glColor4f(1.f, 1.f, 1.f, 1.f);
     }
 
     float Ch_wid = 12;
-    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 3, Tx, Ty, Ch_wid, Ch_wid, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, Rot, 0.f, 17.5f / 32.f, 17.5f / 32.f);
+    RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 3, Tx, Ty, Ch_wid, Ch_wid, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
 
     for (i = 0; i < 25; i++)
     {
@@ -680,7 +680,7 @@ bool SEASON3B::CNewUIMiniMap::GetWorldPositionFromScreen(float screenX, float sc
     if (windowWidthF <= 0.f || windowHeightF <= 0.f)
         return false;
 
-    vec3_t angle = { 0.f, 0.f, -45.f };
+    vec3_t angle = { 0.f, 0.f, 0.f };
     float rotationMatrix[3][4];
     AngleMatrix(angle, rotationMatrix);
 
@@ -1083,7 +1083,7 @@ void CNewUIFieldMiniMap::RenderMiniMapContents(float mapX, float mapY, float map
     FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
     const float mapScale = mapSize;
     const float centerCoord = mapScale * 0.5f;
-    RenderBitRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE, centerCoord, centerCoord, mapScale, mapScale, 45.f);
+    RenderBitRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE, centerCoord, centerCoord, mapScale, mapScale, 0.f);
 }
 
 void CNewUIFieldMiniMap::RenderHeroMarker(float mapX, float mapY, float mapSize) const
@@ -1102,7 +1102,7 @@ void CNewUIFieldMiniMap::RenderHeroMarker(float mapX, float mapY, float mapSize)
     const float centerCoordX = mapScaleX * 0.5f;
     const float centerCoordY = mapScaleY * 0.5f;
     const float iconSize = 12.f;
-    RenderPointRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 3, heroTx, heroTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 45.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
+    RenderPointRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 3, heroTx, heroTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 0.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
 }
 
 void CNewUIFieldMiniMap::RenderMarkers(float mapX, float mapY, float mapSize) const
@@ -1145,7 +1145,7 @@ void CNewUIFieldMiniMap::RenderMarkers(float mapX, float mapY, float mapSize) co
             iconSize = 12.f;
         }
 
-        RenderPointRotate(textureId, markerTx, markerTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 45.f, static_cast<float>(entry.Rotation), 17.5f / 32.f, 17.5f / 32.f);
+        RenderPointRotate(textureId, markerTx, markerTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 0.f, static_cast<float>(entry.Rotation), 17.5f / 32.f, 17.5f / 32.f);
     }
 }
 
@@ -1202,7 +1202,7 @@ float CNewUIFieldMiniMap::GetFrameX() const
 
 float CNewUIFieldMiniMap::GetFrameY() const
 {
-    return 480.f - FIELD_MINIMAP_MARGIN - GetMapSize();
+    return 480.f - FIELD_MINIMAP_MARGIN - GetMapSize() - FIELD_MINIMAP_VERTICAL_OFFSET;
 }
 
 float CNewUIFieldMiniMap::GetMapSize() const
