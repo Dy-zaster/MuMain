@@ -54,6 +54,7 @@ namespace
     constexpr float FIELD_MINIMAP_MARGIN = 12.f;
     constexpr float FIELD_MINIMAP_PADDING = 8.f;
     constexpr float FIELD_MINIMAP_TEXT_HEIGHT = 18.f;
+    constexpr float FIELD_MINIMAP_MAP_ALPHA = 0.8f;
     constexpr float FIELD_MINIMAP_VERTICAL_OFFSET = 48.f;
     class FieldMiniMapTransformGuard
     {
@@ -1044,8 +1045,6 @@ bool CNewUIFieldMiniMap::Render()
         RenderUnavailableText(mapX, mapY, mapSize, mapSize);
     }
 
-    RenderCoordinateInfo(frameX, frameY - FIELD_MINIMAP_TEXT_HEIGHT, frameSize);
-
     DisableAlphaBlend();
 
     return true;
@@ -1068,14 +1067,10 @@ void CNewUIFieldMiniMap::ClosingProcess()
 
 void CNewUIFieldMiniMap::RenderMiniMapFrame(float frameX, float frameY, float frameWidth, float frameHeight) const
 {
-    const float outerPadding = FIELD_MINIMAP_PADDING;
-    RenderColor(frameX - outerPadding, frameY - outerPadding, frameWidth + outerPadding * 2.f, frameHeight + outerPadding * 2.f, 0.55f, 0);
-
-    const float borderThickness = 2.f;
-    RenderColor(frameX - borderThickness, frameY - borderThickness, frameWidth + borderThickness * 2.f, borderThickness, 0.f, 0);
-    RenderColor(frameX - borderThickness, frameY + frameHeight, frameWidth + borderThickness * 2.f, borderThickness, 0.f, 0);
-    RenderColor(frameX - borderThickness, frameY - borderThickness, borderThickness, frameHeight + borderThickness * 2.f, 0.f, 0);
-    RenderColor(frameX + frameWidth, frameY - borderThickness, borderThickness, frameHeight + borderThickness * 2.f, 0.f, 0);
+    (void)frameX;
+    (void)frameY;
+    (void)frameWidth;
+    (void)frameHeight;
 }
 
 void CNewUIFieldMiniMap::RenderMiniMapContents(float mapX, float mapY, float mapSize) const
@@ -1083,7 +1078,9 @@ void CNewUIFieldMiniMap::RenderMiniMapContents(float mapX, float mapY, float map
     FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
     const float mapScale = mapSize;
     const float centerCoord = mapScale * 0.5f;
+    glColor4f(1.f, 1.f, 1.f, FIELD_MINIMAP_MAP_ALPHA);
     RenderBitRotate(CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE, centerCoord, centerCoord, mapScale, mapScale, 0.f);
+    glColor4f(1.f, 1.f, 1.f, 1.f);
 }
 
 void CNewUIFieldMiniMap::RenderHeroMarker(float mapX, float mapY, float mapSize) const
@@ -1147,37 +1144,6 @@ void CNewUIFieldMiniMap::RenderMarkers(float mapX, float mapY, float mapSize) co
 
         RenderPointRotate(textureId, markerTx, markerTy, iconSize, iconSize, centerCoordX, centerCoordY, mapScaleX, mapScaleY, 0.f, static_cast<float>(entry.Rotation), 17.5f / 32.f, 17.5f / 32.f);
     }
-}
-
-void CNewUIFieldMiniMap::RenderCoordinateInfo(float frameX, float frameY, float frameWidth) const
-{
-    const wchar_t* mapName = gMapManager.GetMapName(gMapManager.WorldActive);
-    if (mapName == nullptr)
-    {
-        mapName = L"";
-    }
-
-    int heroX = 0;
-    int heroY = 0;
-    if (Hero != NULL)
-    {
-        heroX = Hero->PositionX;
-        heroY = Hero->PositionY;
-    }
-
-    wchar_t buffer[128];
-    swprintf(buffer, L"%s  X:%d  Y:%d", mapName, heroX, heroY);
-
-    const DWORD backupTextColor = g_pRenderText->GetTextColor();
-    const DWORD backupBgColor = g_pRenderText->GetBgColor();
-
-    g_pRenderText->SetFont(g_hFont);
-    g_pRenderText->SetTextColor(RGBA(255, 255, 255, 255));
-    g_pRenderText->SetBgColor(RGBA(0, 0, 0, 140));
-    g_pRenderText->RenderText(frameX - 6.f, frameY, buffer, frameWidth + 12.f, 0, RT3_SORT_CENTER);
-
-    g_pRenderText->SetTextColor(backupTextColor);
-    g_pRenderText->SetBgColor(backupBgColor);
 }
 
 void CNewUIFieldMiniMap::RenderUnavailableText(float frameX, float frameY, float frameWidth, float frameHeight) const
