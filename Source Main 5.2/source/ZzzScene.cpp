@@ -55,7 +55,6 @@
 #include <chrono>
 #include <thread>
 #include <array>
-#include <algorithm>
 
 #include "CharacterManager.h"
 
@@ -1344,6 +1343,13 @@ bool MoveMainCamera()
     if (WasTogglePressed(VK_F10))
     {
         g_bFreeCameraControl = !g_bFreeCameraControl;
+
+        if (!g_bFreeCameraControl)
+        {
+            g_fFreeCameraZoomOffset = 0.f;
+            CameraAngle[2] = -45.f;
+        }
+
         const wchar_t* toggleMessage = g_bFreeCameraControl ? L"Free camera controls enabled (F10 to toggle)" : L"Free camera controls disabled";
         g_ConsoleDebug->Write(MCD_NORMAL, toggleMessage);
         if (g_pSystemLogBox)
@@ -1359,13 +1365,11 @@ bool MoveMainCamera()
         bool EditMove = false;
         if (!g_pUIManager->IsInputEnable())
         {
-            const float kRotationStep = 5.f;
+            const float kRotationStep = 2.5f;
             if (HIBYTE(GetAsyncKeyState(VK_INSERT)) == 128)
                 CameraAngle[2] += kRotationStep;
             if (HIBYTE(GetAsyncKeyState(VK_DELETE)) == 128)
                 CameraAngle[2] -= kRotationStep;
-            if (HIBYTE(GetAsyncKeyState(VK_HOME)) == 128)
-                CameraAngle[2] = -45;
 
             if (CameraAngle[2] < -360)
                 CameraAngle[2] += 360;
@@ -1648,6 +1652,22 @@ bool MoveMainCamera()
             const float desiredDistance = ApplyFreeCameraZoom(CameraDistanceTarget);
             CameraDistance += (desiredDistance - CameraDistance) / 3;
             CameraDistanceTarget = desiredDistance;
+        }
+    }
+
+    if (g_bFreeCameraControl)
+    {
+        const float kFreeCamFarMargin = 2000.f;
+        const float kFreeCamFarFallback = 6000.f;
+        float minViewFar = kFreeCamFarFallback;
+        const float desiredFar = CameraDistance + kFreeCamFarMargin;
+        if (minViewFar < desiredFar)
+        {
+            minViewFar = desiredFar;
+        }
+        if (CameraViewFar < minViewFar)
+        {
+            CameraViewFar = minViewFar;
         }
     }
 

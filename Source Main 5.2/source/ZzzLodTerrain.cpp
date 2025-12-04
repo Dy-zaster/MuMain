@@ -16,6 +16,7 @@
 #include "ZzzCharacter.h"
 #include "ZzzInterface.h"
 #include "ZzzEffect.h"
+#include "ZzzScene.h"
 
 #include "CSChaosCastle.h"
 #include "CMVP1stDirection.h"
@@ -2105,6 +2106,20 @@ void CreateFrustrum2D(vec3_t Position)
             WidthFar = 1600.f * Width; // 1140.f
             WidthNear = 660.f * Width; // 540.f
             break;
+        }
+    }
+
+    if (g_bFreeCameraControl && CameraViewFar > 0.f)
+    {
+        const float desiredFar = CameraDistance + 2500.f;
+        if (desiredFar > CameraViewFar)
+        {
+            const float scale = desiredFar / CameraViewFar;
+            CameraViewFar = desiredFar;
+            CameraViewNear *= scale;
+            CameraViewTarget *= scale;
+            WidthFar *= scale;
+            WidthNear *= scale;
         }
     }
 

@@ -15,6 +15,8 @@ extern bool EnableMainRender;
 extern wchar_t* szServerIpAddress;
 extern unsigned short g_ServerPort;
 extern int g_iLengthAuthorityCode;
+extern bool g_bFreeCameraControl;
+extern float CameraDistance;
 
 inline SpinLock* g_render_lock = new SpinLock();
 
