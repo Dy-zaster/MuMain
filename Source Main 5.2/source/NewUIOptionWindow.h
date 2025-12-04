@@ -67,8 +67,29 @@ namespace SEASON3B
         int GetRenderLevel();
         void SetRenderAllEffects(bool bRenderAllEffects);
         bool GetRenderAllEffects();
+        void SetShowFPSCounter(bool bShowFPS);
+        bool IsShowFPSCounter() const;
+        void SetVerticalSync(bool bEnabled);
+        bool IsVerticalSyncEnabled() const;
+        void SetShowMonsterHPBar(bool bShowHP);
+        bool IsMonsterHpBarEnabled() const;
+        void SetResolutionIndex(int index);
+        int GetResolutionIndex() const;
+        void CycleResolution(int delta);
+        void FormatResolutionText(wchar_t* buffer, size_t count) const;
 
     private:
+        enum class CheckboxId
+        {
+            AutoAttack,
+            WhisperSound,
+            SlideHelp,
+            RenderFullEffects,
+            MonsterHP,
+            ShowFPS,
+            VerticalSync
+        };
+
         void LoadImages();
         void UnloadImages();
 
@@ -77,6 +98,11 @@ namespace SEASON3B
         void RenderFrame();
         void RenderContents();
         void RenderButtons();
+        RECT GetCheckboxRect(CheckboxId id) const;
+        RECT GetVolumeSliderRect() const;
+        RECT GetRenderSliderRect() const;
+        RECT GetResolutionRect() const;
+        void RenderCheckbox(const RECT& rect, bool checked) const;
 
     private:
         CNewUIManager* m_pNewUIMng;
@@ -90,6 +116,13 @@ namespace SEASON3B
         int m_iVolumeLevel;		// 볼륨조절
         int m_iRenderLevel;		// 효과제한
         bool m_bRenderAllEffects;
+        bool m_bShowFPSCounter;
+        bool m_bVerticalSync;
+        bool m_bShowMonsterHPBar;
+        int m_iResolutionIndex;
+
+        void ApplyResolutionChange() const;
+        void GetResolutionOptionText(wchar_t* buffer, size_t count) const;
     };
 }
 

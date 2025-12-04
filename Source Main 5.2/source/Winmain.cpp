@@ -41,6 +41,7 @@
 #include "Input.h"
 #include "./Time/Timer.h"
 #include "UIMng.h"
+#include "ResolutionOptions.h"
 
 
 #include "w_MapHeaders.h"
@@ -355,6 +356,10 @@ void DestroyWindow()
     leaf::CRegKey regkey;
     regkey.SetKey(leaf::CRegKey::_HKEY_CURRENT_USER, L"SOFTWARE\\Webzen\\Mu\\Config");
     regkey.WriteDword(L"VolumeLevel", g_pOption->GetVolumeLevel());
+    regkey.WriteDword(L"ShowFPSCounter", g_pOption->IsShowFPSCounter() ? 1U : 0U);
+    regkey.WriteDword(L"VerticalSync", g_pOption->IsVerticalSyncEnabled() ? 1U : 0U);
+    regkey.WriteDword(L"ShowMonsterHPBars", g_pOption->IsMonsterHpBarEnabled() ? 1U : 0U);
+    regkey.WriteDword(L"Resolution", m_Resolution);
 
     CUIMng::Instance().Release();
 
@@ -959,7 +964,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLin
         if (RegQueryValueEx(hKey, L"Resolution", nullptr, nullptr, (LPBYTE)&m_Resolution, &dwSize) != ERROR_SUCCESS)
             m_Resolution = 1;
 
-        if (0 == m_Resolution)
+        const auto resolutionCount = static_cast<int>(g_ResolutionOptions.size());
+        if (m_Resolution < 0 || m_Resolution >= resolutionCount)
             m_Resolution = 1;
 
         dwSize = sizeof(int);
@@ -995,57 +1001,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLin
     }
     RegCloseKey(hKey);
 
-    switch (m_Resolution)
-    {
-    case 0:
-        WindowWidth = 640;
-        WindowHeight = 480;
-        break;
-    case 1:
-        WindowWidth = 800;
-        WindowHeight = 600;
-        break;
-    case 2:
-        WindowWidth = 1024;
-        WindowHeight = 768;
-        break;
-    case 3:
-        WindowWidth = 1280;
-        WindowHeight = 1024;
-        break;
-    case 4:
-        WindowWidth = 1600;
-        WindowHeight = 1200;
-        break;
-    case 5:
-        WindowWidth = 1864;
-        WindowHeight = 1400;
-        break;
-    case 6:
-        WindowWidth = 1600;
-        WindowHeight = 900;
-        break;
-    case 7:
-        WindowWidth = 1600;
-        WindowHeight = 1280;
-        break;
-    case 8:
-        WindowWidth = 1680;
-        WindowHeight = 1050;
-        break;
-    case 9:
-        WindowWidth = 1920;
-        WindowHeight = 1080;
-        break;
-    case 10:
-        WindowWidth = 2560;
-        WindowHeight = 1440;
-        break;
-    default:
-        WindowWidth = 640;
-        WindowHeight = 480;
-        break;
-    }
+    const auto selectedResolution = GetResolutionOption(m_Resolution);
+    WindowWidth = selectedResolution.width;
+    WindowHeight = selectedResolution.height;
 
     g_fScreenRate_x = (float)WindowWidth / 640;
     g_fScreenRate_y = (float)WindowHeight / 480;
@@ -1239,6 +1197,35 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLin
     CInput::Instance().Create(g_hWnd, WindowWidth, WindowHeight);
 
     g_pNewUISystem->Create();
+
+    {
+        leaf::CRegKey regkey;
+        regkey.SetKey(leaf::CRegKey::_HKEY_CURRENT_USER, L"SOFTWARE\\Webzen\\Mu\\Config");
+        DWORD value = 0;
+        if (regkey.ReadDword(L"ShowFPSCounter", value))
+        {
+            g_pOption->SetShowFPSCounter(value != 0);
+        }
+        if (regkey.ReadDword(L"VerticalSync", value))
+        {
+            g_pOption->SetVerticalSync(value != 0);
+        }
+        else
+        {
+            g_pOption->SetVerticalSync(IsVSyncAvailable());
+        }
+
+        if (regkey.ReadDword(L"ShowMonsterHPBars", value))
+        {
+            g_pOption->SetShowMonsterHPBar(value != 0);
+        }
+        else
+        {
+            g_pOption->SetShowMonsterHPBar(true);
+        }
+    }
+
+    g_pOption->SetResolutionIndex(m_Resolution);
 
     if (m_MusicOnOff)
     {

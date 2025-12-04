@@ -60,6 +60,20 @@ Because of the integrated C# code, you need to publish the ManagedLibrary first
 to the debug output folder of the main.exe, so that the DLL is built with Native AOT.
 A simple build is not enough in this case, however the publish just needs to be done once.
 
+### Automated build script
+
+To run both steps (Native AOT publish + native client build) from a single command,
+execute the `build.ps1` script from the repository root with PowerShell:
+
+```
+.\build.ps1 -Configuration GlobalDebug -Platform x86
+```
+
+Valid configurations are `GlobalDebug` (default) and `GlobalRelease`; platforms are
+`x86` (default, alias `Win32`) or `x64`. Use `-Rebuild` to force a full rebuild,
+`-SkipManaged` if you only want to recompile the native project, or `-SkipNative`
+to just publish the managed library.
+
 It supports the common starting parameters `/u` and `/p`, example: `main.exe connect /u192.168.0.20 /p55902`.
 The [OpenMU launcher](https://github.com/MUnique/OpenMU/releases/download/v0.8.17/MUnique.OpenMU.ClientLauncher_0.8.17.zip)
 will work as well. By default, it connects to localhost and port `44406`.

@@ -12,6 +12,7 @@
 #include "ZzzCharacter.h"
 #include "ZzzInterface.h"
 #include "ZzzScene.h"
+#include "ZzzOpenglUtil.h"
 #include "DSPlaySound.h"
 #include "UIControls.h"
 #include "NewUISystem.h"
@@ -24,6 +25,7 @@
 
 COptionWin::COptionWin()
 {
+    ZeroMemory(&m_rcResolutionArea, sizeof(m_rcResolutionArea));
 }
 
 COptionWin::~COptionWin()
@@ -46,7 +48,7 @@ void COptionWin::Create()
     m_winBack.Create(aiiBack, 1, 30);
     m_winBack.SetLine(30);
 
-    for (int i = 0; i <= OW_BTN_SLIDE_HELP; ++i)
+    for (int i = 0; i <= OW_BTN_VSYNC; ++i)
     {
         m_aBtn[i].Create(16, 16, BITMAP_CHECK_BTN, 2, 0, 0, -1, 1, 1, 1);
         CWin::RegisterButton(&m_aBtn[i]);
@@ -100,8 +102,18 @@ void COptionWin::SetPosition(int nXCoord, int nYCoord)
         + m_aBtn[0].GetHeight() + OW_SLD_GAP;
     for (int i = 0; i < OW_SLD_MAX; ++i)
         m_aSlider[i].SetPosition(nBtnPosX, nSldPosBaseTop + i * nSldGap);
-}
 
+    m_rcResolutionArea.left = nBtnPosX;
+    m_rcResolutionArea.top = m_aSlider[OW_SLD_RENDER_LV].GetYPos()
+        + m_aSlider[0].GetHeight() + 8;
+    m_rcResolutionArea.right = m_rcResolutionArea.left + 180;
+    m_rcResolutionArea.bottom = m_rcResolutionArea.top + 24;
+
+    int nExtraBtnPosBaseTop = m_rcResolutionArea.bottom + OW_BTN_GAP / 2;
+    m_aBtn[OW_BTN_MONSTER_HP].SetPosition(nBtnPosX, nExtraBtnPosBaseTop);
+    m_aBtn[OW_BTN_SHOW_FPS].SetPosition(nBtnPosX, nExtraBtnPosBaseTop + nBtnGap);
+    m_aBtn[OW_BTN_VSYNC].SetPosition(nBtnPosX, nExtraBtnPosBaseTop + nBtnGap * 2);
+}
 void COptionWin::Show(bool bShow)
 {
     CWin::Show(bShow);
@@ -132,10 +144,12 @@ void COptionWin::UpdateDisplay()
     m_aBtn[OW_BTN_AUTO_ATTACK].SetCheck(g_pOption->IsAutoAttack());
     m_aBtn[OW_BTN_WHISPER_ALARM].SetCheck(g_pOption->IsWhisperSound());
     m_aBtn[OW_BTN_SLIDE_HELP].SetCheck(g_pOption->IsSlideHelp());
+    m_aBtn[OW_BTN_MONSTER_HP].SetCheck(g_pOption->IsMonsterHpBarEnabled());
+    m_aBtn[OW_BTN_SHOW_FPS].SetCheck(g_pOption->IsShowFPSCounter());
+    m_aBtn[OW_BTN_VSYNC].SetCheck(g_pOption->IsVerticalSyncEnabled());
     m_aSlider[OW_SLD_EFFECT_VOL].SetSlidePos(g_pOption->GetVolumeLevel());
     m_aSlider[OW_SLD_RENDER_LV].SetSlidePos(g_pOption->GetRenderLevel());
 }
-
 void COptionWin::UpdateWhileActive(double dDeltaTick)
 {
     for (int i = 0; i < OW_SLD_MAX; ++i)
@@ -152,6 +166,19 @@ void COptionWin::UpdateWhileActive(double dDeltaTick)
     else if (m_aBtn[OW_BTN_SLIDE_HELP].IsClick())
     {
         g_pOption->SetSlideHelp(m_aBtn[OW_BTN_SLIDE_HELP].IsCheck());
+    }
+    else if (m_aBtn[OW_BTN_MONSTER_HP].IsClick())
+    {
+        g_pOption->SetShowMonsterHPBar(m_aBtn[OW_BTN_MONSTER_HP].IsCheck());
+    }
+    else if (m_aBtn[OW_BTN_SHOW_FPS].IsClick())
+    {
+        g_pOption->SetShowFPSCounter(m_aBtn[OW_BTN_SHOW_FPS].IsCheck());
+    }
+    else if (m_aBtn[OW_BTN_VSYNC].IsClick())
+    {
+        g_pOption->SetVerticalSync(m_aBtn[OW_BTN_VSYNC].IsCheck());
+        m_aBtn[OW_BTN_VSYNC].SetCheck(g_pOption->IsVerticalSyncEnabled());
     }
     else if (m_aBtn[OW_BTN_CLOSE].IsClick())
     {
@@ -176,6 +203,17 @@ void COptionWin::UpdateWhileActive(double dDeltaTick)
             g_pOption->SetRenderLevel(nSlidePos);
         }
     }
+    else if (MouseLButtonPush && CheckMouseIn(m_rcResolutionArea.left, m_rcResolutionArea.top, m_rcResolutionArea.right - m_rcResolutionArea.left, m_rcResolutionArea.bottom - m_rcResolutionArea.top))
+    {
+        g_pOption->CycleResolution(1);
+        MouseLButtonPush = false;
+    }
+    else if (MouseRButtonPush && CheckMouseIn(m_rcResolutionArea.left, m_rcResolutionArea.top, m_rcResolutionArea.right - m_rcResolutionArea.left, m_rcResolutionArea.bottom - m_rcResolutionArea.top))
+    {
+        g_pOption->CycleResolution(-1);
+        MouseRButtonPush = false;
+        MouseRButton = false;
+    }
     else if (CInput::Instance().IsKeyDown(VK_ESCAPE))
     {
         ::PlayBuffer(SOUND_CLICK01);
@@ -183,7 +221,6 @@ void COptionWin::UpdateWhileActive(double dDeltaTick)
         CUIMng::Instance().SetSysMenuWinShow(false);
     }
 }
-
 void COptionWin::RenderControls()
 {
     m_winBack.Render();
@@ -195,13 +232,21 @@ void COptionWin::RenderControls()
         int((m_winBack.GetYPos() + 10) / g_fScreenRate_y),
         GlobalText[385], m_winBack.GetWidth() / g_fScreenRate_x, 0, RT3_SORT_CENTER);
 
-    const wchar_t* apszBtnText[3] =
-    { GlobalText[386], GlobalText[387], GlobalText[919] };
-    for (int i = 0; i <= OW_BTN_SLIDE_HELP; ++i)
+    const wchar_t* szVSyncLabel = IsVSyncAvailable() ? L"Vertical Sync" : L"Vertical Sync (Unavailable)";
+    const wchar_t* apszBtnText[6] =
+    { GlobalText[386], GlobalText[387], GlobalText[919], L"Show Monster HP Bars", L"Show FPS Counter", szVSyncLabel };
+    for (int i = 0; i <= OW_BTN_VSYNC; ++i)
     {
         g_pRenderText->RenderText(int((m_aBtn[i].GetXPos() + 24) / g_fScreenRate_x),
             int((m_aBtn[i].GetYPos() + 4) / g_fScreenRate_y), apszBtnText[i]);
     }
+
+    wchar_t szResolution[64];
+    g_pOption->FormatResolutionText(szResolution, sizeof(szResolution) / sizeof(szResolution[0]));
+    g_pRenderText->RenderText(int(m_rcResolutionArea.left / g_fScreenRate_x),
+        int(m_rcResolutionArea.top / g_fScreenRate_y), szResolution);
+    g_pRenderText->RenderText(int(m_rcResolutionArea.left / g_fScreenRate_x),
+        int((m_rcResolutionArea.top + 14) / g_fScreenRate_y), L"L/R Click to change");
 
     int nTextPosY;
     const wchar_t* apszSldText[OW_SLD_MAX] = { GlobalText[389], GlobalText[1840] };

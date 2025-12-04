@@ -54,6 +54,8 @@
 #include "MapManager.h"
 #include <chrono>
 #include <thread>
+#include <array>
+#include <algorithm>
 
 #include "CharacterManager.h"
 
@@ -1247,6 +1249,86 @@ float CameraDistanceTarget = 1000.f;
 float CameraDistance = CameraDistanceTarget;
 float	Camera3DFov = 0.f;
 bool	Camera3DRoll = false;
+bool    g_bFreeCameraControl = false;
+float   g_fFreeCameraZoomOffset = 0.f;
+
+namespace
+{
+    bool WasTogglePressed(int virtualKey)
+    {
+        static std::array<bool, 256> keyStates{};
+
+        if (virtualKey < 0 || virtualKey >= static_cast<int>(keyStates.size()))
+        {
+            return false;
+        }
+
+        const bool isDown = (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+        const bool pressed = isDown && !keyStates[virtualKey];
+        keyStates[virtualKey] = isDown;
+        return pressed;
+    }
+
+    void ConsumeFreeCameraZoomInput()
+    {
+        if (!g_bFreeCameraControl)
+        {
+            return;
+        }
+
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0)
+        {
+            return;
+        }
+
+        if (MouseWheel == 0)
+        {
+            return;
+        }
+
+        if (g_pUIManager->IsInputEnable())
+        {
+            return;
+        }
+
+        constexpr float kZoomStep = 40.f;
+        constexpr float kZoomOffsetMin = -600.f;
+        constexpr float kZoomOffsetMax = 800.f;
+
+        g_fFreeCameraZoomOffset -= MouseWheel * kZoomStep;
+        if (g_fFreeCameraZoomOffset < kZoomOffsetMin)
+        {
+            g_fFreeCameraZoomOffset = kZoomOffsetMin;
+        }
+        else if (g_fFreeCameraZoomOffset > kZoomOffsetMax)
+        {
+            g_fFreeCameraZoomOffset = kZoomOffsetMax;
+        }
+        MouseWheel = 0;
+    }
+
+    float ApplyFreeCameraZoom(float baseDistance)
+    {
+        if (!g_bFreeCameraControl)
+        {
+            g_fFreeCameraZoomOffset = 0.f;
+            return baseDistance;
+        }
+
+        constexpr float kMinDistance = 600.f;
+        constexpr float kMaxDistance = 2200.f;
+        float desired = baseDistance + g_fFreeCameraZoomOffset;
+        if (desired < kMinDistance)
+        {
+            desired = kMinDistance;
+        }
+        else if (desired > kMaxDistance)
+        {
+            desired = kMaxDistance;
+        }
+        return desired;
+    }
+}
 
 bool MoveMainCamera()
 {
@@ -1259,15 +1341,29 @@ bool MoveMainCamera()
     else
         CameraFOV = 30.f;
 
-#ifdef ENABLE_EDIT2
+    if (WasTogglePressed(VK_F10))
+    {
+        g_bFreeCameraControl = !g_bFreeCameraControl;
+        const wchar_t* toggleMessage = g_bFreeCameraControl ? L"Free camera controls enabled (F10 to toggle)" : L"Free camera controls disabled";
+        g_ConsoleDebug->Write(MCD_NORMAL, toggleMessage);
+        if (g_pSystemLogBox)
+        {
+            g_pSystemLogBox->AddText(toggleMessage, SEASON3B::TYPE_SYSTEM_MESSAGE);
+        }
+    }
+
+    ConsumeFreeCameraZoomInput();
+
+    if (g_bFreeCameraControl)
     {
         bool EditMove = false;
         if (!g_pUIManager->IsInputEnable())
         {
+            const float kRotationStep = 5.f;
             if (HIBYTE(GetAsyncKeyState(VK_INSERT)) == 128)
-                CameraAngle[2] += 15;
+                CameraAngle[2] += kRotationStep;
             if (HIBYTE(GetAsyncKeyState(VK_DELETE)) == 128)
-                CameraAngle[2] -= 15;
+                CameraAngle[2] -= kRotationStep;
             if (HIBYTE(GetAsyncKeyState(VK_HOME)) == 128)
                 CameraAngle[2] = -45;
 
@@ -1279,7 +1375,7 @@ bool MoveMainCamera()
 
             vec3_t p1, p2;
             Vector(0.f, 0.f, 0.f, p1);
-            FLOAT Velocity = sqrtf(TERRAIN_SCALE * TERRAIN_SCALE) * 1.25f * FPS_ANIMATION_FACTOR;
+            float Velocity = sqrtf(TERRAIN_SCALE * TERRAIN_SCALE) * 1.25f * FPS_ANIMATION_FACTOR;
 
             if (HIBYTE(GetAsyncKeyState(VK_LEFT)) == 128)
             {
@@ -1343,7 +1439,6 @@ bool MoveMainCamera()
             Hero->Path.PathNum = 0;
         }
     }
-#endif //ENABLE_EDIT2
 
     CameraAngle[0] = 0.f;
     CameraAngle[1] = 0.f;
@@ -1415,12 +1510,12 @@ bool MoveMainCamera()
         {
             g_pCatapultWindow->GetCameraPos(Position);
         }
-        else if (CCameraMove::GetInstancePtr()->IsTourMode())
-        {
-            CCameraMove::GetInstancePtr()->UpdateTourWayPoint();
-            CCameraMove::GetInstancePtr()->GetCurrentCameraPos(Position);
-            CameraViewFar = 390.f * CCameraMove::GetInstancePtr()->GetCurrentCameraDistanceLevel();
-        }
+    else if (CCameraMove::GetInstancePtr()->IsTourMode())
+    {
+        CCameraMove::GetInstancePtr()->UpdateTourWayPoint();
+        CCameraMove::GetInstancePtr()->GetCurrentCameraPos(Position);
+        CameraViewFar = 390.f * CCameraMove::GetInstancePtr()->GetCurrentCameraDistanceLevel();
+    }
 
         if (g_Direction.IsDirection() && !g_Direction.m_bDownHero)
         {
@@ -1524,26 +1619,35 @@ bool MoveMainCamera()
     else if (CCameraMove::GetInstancePtr()->IsTourMode())
     {
         CameraDistanceTarget = 1100.f * CCameraMove::GetInstancePtr()->GetCurrentCameraDistanceLevel() * 0.1f;
-        CameraDistance = CameraDistanceTarget;
+        const float desiredDistance = ApplyFreeCameraZoom(CameraDistanceTarget);
+        CameraDistanceTarget = desiredDistance;
+        CameraDistance = desiredDistance;
     }
     else
     {
         if (gMapManager.InBattleCastle())
         {
             CameraDistanceTarget = 1100.f;
-            CameraDistance = CameraDistanceTarget;
+            const float desiredDistance = ApplyFreeCameraZoom(CameraDistanceTarget);
+            CameraDistanceTarget = desiredDistance;
+            CameraDistance = desiredDistance;
         }
         else
         {
             switch (g_shCameraLevel)
             {
-            case 0: CameraDistanceTarget = 1000.f; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
-            case 1: CameraDistanceTarget = 1100.f; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
-            case 2: CameraDistanceTarget = 1200.f; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
-            case 3: CameraDistanceTarget = 1300.f; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
-            case 4: CameraDistanceTarget = 1400.f; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
-            case 5: CameraDistanceTarget = g_Direction.m_fCameraViewFar; CameraDistance += (CameraDistanceTarget - CameraDistance) / 3; break;
+            case 0: CameraDistanceTarget = 1000.f; break;
+            case 1: CameraDistanceTarget = 1100.f; break;
+            case 2: CameraDistanceTarget = 1200.f; break;
+            case 3: CameraDistanceTarget = 1300.f; break;
+            case 4: CameraDistanceTarget = 1400.f; break;
+            case 5: CameraDistanceTarget = g_Direction.m_fCameraViewFar; break;
+            default: CameraDistanceTarget = 1000.f; break;
             }
+
+            const float desiredDistance = ApplyFreeCameraZoom(CameraDistanceTarget);
+            CameraDistance += (desiredDistance - CameraDistance) / 3;
+            CameraDistanceTarget = desiredDistance;
         }
     }
 
@@ -2127,22 +2231,37 @@ void MainScene(HDC hDC)
         g_PhysicsManager.Render();
 
 #if defined(_DEBUG) || defined(LDS_FOR_DEVELOPMENT_TESTMODE) || defined(LDS_UNFIXED_FIXEDFRAME_FORDEBUG)
-        BeginBitmap();
-        wchar_t szDebugText[128];
-        swprintf(szDebugText, L"FPS: %.1f Vsync: %d CPU: %.1f%%", FPS_AVG, IsVSyncEnabled(), CPU_AVG);
-        wchar_t szMousePos[128];
-        swprintf(szMousePos, L"MousePos : %d %d %d", MouseX, MouseY, MouseLButtonPush);
-        wchar_t szCamera3D[128];
-        swprintf(szCamera3D, L"Camera3D : %.1f %.1f:%.1f:%.1f", CameraFOV, CameraAngle[0], CameraAngle[1], CameraAngle[2]);
-        g_pRenderText->SetFont(g_hFontBold);
-        g_pRenderText->SetBgColor(0, 0, 0, 100);
-        g_pRenderText->SetTextColor(255, 255, 255, 200);
-        g_pRenderText->RenderText(10, 26, szDebugText);
-        g_pRenderText->RenderText(10, 36, szMousePos);
-        g_pRenderText->RenderText(10, 46, szCamera3D);
-        g_pRenderText->SetFont(g_hFont);
-        EndBitmap();
-#endif // defined(_DEBUG) || defined(LDS_FOR_DEVELOPMENT_TESTMODE) || defined(LDS_UNFIXED_FIXEDFRAME_FORDEBUG)
+        const bool bDebugOverlay = true;
+#else
+        const bool bDebugOverlay = false;
+#endif
+        const bool bShowFPSOverlay = bDebugOverlay || (g_pOption != nullptr && g_pOption->IsShowFPSCounter());
+
+        if (bShowFPSOverlay)
+        {
+            BeginBitmap();
+            wchar_t szDebugText[128];
+            swprintf(szDebugText, L"FPS: %.1f Vsync: %d CPU: %.1f%%", FPS_AVG, IsVSyncEnabled(), CPU_AVG);
+#if defined(_DEBUG) || defined(LDS_FOR_DEVELOPMENT_TESTMODE) || defined(LDS_UNFIXED_FIXEDFRAME_FORDEBUG)
+            wchar_t szMousePos[128];
+            swprintf(szMousePos, L"MousePos : %d %d %d", MouseX, MouseY, MouseLButtonPush);
+            wchar_t szCamera3D[128];
+            swprintf(szCamera3D, L"Camera3D : %.1f %.1f:%.1f:%.1f", CameraFOV, CameraAngle[0], CameraAngle[1], CameraAngle[2]);
+#endif
+            g_pRenderText->SetFont(g_hFontBold);
+            g_pRenderText->SetBgColor(0, 0, 0, 100);
+            g_pRenderText->SetTextColor(255, 255, 255, 200);
+            g_pRenderText->RenderText(10, 26, szDebugText);
+#if defined(_DEBUG) || defined(LDS_FOR_DEVELOPMENT_TESTMODE) || defined(LDS_UNFIXED_FIXEDFRAME_FORDEBUG)
+            if (bDebugOverlay)
+            {
+                g_pRenderText->RenderText(10, 36, szMousePos);
+                g_pRenderText->RenderText(10, 46, szCamera3D);
+            }
+#endif
+            g_pRenderText->SetFont(g_hFont);
+            EndBitmap();
+        }
 
         if (Success)
         {

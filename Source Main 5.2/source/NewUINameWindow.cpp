@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "NewUINameWindow.h"
+#include "NewUISystem.h"
 #include "ZzzBmd.h"
 #include "ZzzObject.h"
 #include "ZzzCharacter.h"
@@ -141,7 +142,7 @@ void SEASON3B::CNewUINameWindow::RenderName()
                 g_pRenderText->SetBgColor(100, 0, 0, 255);
                 g_pRenderText->RenderText(320, 2, c->ID, 0, 0, RT3_WRITE_CENTER);
 
-                if (c->HealthStatus > 0)
+                if (g_pOption && g_pOption->IsMonsterHpBarEnabled() && c->HealthStatus > 0)
                 {
                     const auto steps = 20;
                     const auto borderWidth = 2.f;

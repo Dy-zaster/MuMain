@@ -7,8 +7,39 @@
 #include "NewUISystem.h"
 #include "ZzzTexture.h"
 #include "DSPlaySound.h"
+#include "ZzzScene.h"
+#include "ZzzOpenglUtil.h"
+#include "Winmain.h"
+#include "./ExternalObject/leaf/regkey.h"
+#include "ResolutionOptions.h"
+#include <array>
+#include <cmath>
 
 using namespace SEASON3B;
+
+namespace
+{
+    constexpr float kOptionWindowWidth = 240.f;
+    constexpr float kOptionWindowHeight = 320.f;
+    constexpr int kSectionLineInset = 18;
+    constexpr int kGeneralTextStartOffset = 64;
+    constexpr int kGraphicsTextStartOffset = 64;
+    constexpr int kRowSpacing = 22;
+    constexpr int kLeftPointOffsetX = 20;
+    constexpr int kLeftTextOffsetX = 40;
+    constexpr int kLeftCheckboxOffsetX = 130;
+    constexpr int kRightPointOffsetX = 140;
+    constexpr int kRightTextOffsetX = 160;
+    constexpr int kRightCheckboxOffsetX = 210;
+    constexpr int kCheckboxSize = 15;
+    constexpr int kVolumeTextOffsetY = 136;
+    constexpr int kVolumeSliderOffsetY = 152;
+    constexpr int kRenderTextOffsetY = 188;
+    constexpr int kRenderSliderOffsetY = 206;
+    constexpr int kResolutionAreaOffsetY = 242;
+    constexpr int kResolutionAreaWidth = 170;
+    constexpr int kResolutionAreaHeight = 32;
+}
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -26,6 +57,10 @@ SEASON3B::CNewUIOptionWindow::CNewUIOptionWindow()
     m_iVolumeLevel = 0;
     m_iRenderLevel = 4;
     m_bRenderAllEffects = true;
+    m_bShowFPSCounter = false;
+    m_bVerticalSync = IsVSyncEnabled();
+    m_bShowMonsterHPBar = true;
+    m_iResolutionIndex = 1;
 }
 
 SEASON3B::CNewUIOptionWindow::~CNewUIOptionWindow()
@@ -51,7 +86,11 @@ void SEASON3B::CNewUIOptionWindow::SetButtonInfo()
 {
     m_BtnClose.ChangeTextBackColor(RGBA(255, 255, 255, 0));
     m_BtnClose.ChangeButtonImgState(true, IMAGE_OPTION_BTN_CLOSE, true);
-    m_BtnClose.ChangeButtonInfo(m_Pos.x + 68, m_Pos.y + 229, 54, 30);
+    m_BtnClose.ChangeButtonInfo(
+        m_Pos.x + static_cast<int>((kOptionWindowWidth - 54.f) * 0.5f),
+        m_Pos.y + static_cast<int>(kOptionWindowHeight) - 55,
+        54,
+        30);
     m_BtnClose.ChangeImgColor(BUTTON_STATE_UP, RGBA(255, 255, 255, 255));
     m_BtnClose.ChangeImgColor(BUTTON_STATE_DOWN, RGBA(255, 255, 255, 255));
 }
@@ -81,31 +120,65 @@ bool SEASON3B::CNewUIOptionWindow::UpdateMouseEvent()
         return false;
     }
 
-    if (SEASON3B::IsPress(VK_LBUTTON) && CheckMouseIn(m_Pos.x + 150, m_Pos.y + 43, 15, 15))
+    auto isMouseInRect = [](const RECT& rect)
     {
-        m_bAutoAttack = !m_bAutoAttack;
+        return CheckMouseIn(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+    };
+
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::AutoAttack)))
+    {
+        SetAutoAttack(!IsAutoAttack());
     }
-    if (SEASON3B::IsPress(VK_LBUTTON) && CheckMouseIn(m_Pos.x + 150, m_Pos.y + 65, 15, 15))
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::WhisperSound)))
     {
-        m_bWhisperSound = !m_bWhisperSound;
+        SetWhisperSound(!IsWhisperSound());
     }
-    if (SEASON3B::IsPress(VK_LBUTTON) && CheckMouseIn(m_Pos.x + 150, m_Pos.y + 127, 15, 15))
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::SlideHelp)))
     {
-        m_bSlideHelp = !m_bSlideHelp;
+        SetSlideHelp(!IsSlideHelp());
     }
 
-    if (SEASON3B::IsPress(VK_LBUTTON) && CheckMouseIn(m_Pos.x + 150, m_Pos.y + 210, 15, 15))
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::RenderFullEffects)))
     {
-        m_bRenderAllEffects = !m_bRenderAllEffects;
+        SetRenderAllEffects(!GetRenderAllEffects());
+    }
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::MonsterHP)))
+    {
+        SetShowMonsterHPBar(!IsMonsterHpBarEnabled());
+    }
+    if (SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::ShowFPS)))
+    {
+        SetShowFPSCounter(!IsShowFPSCounter());
+    }
+    if (IsVSyncAvailable() && SEASON3B::IsPress(VK_LBUTTON) && isMouseInRect(GetCheckboxRect(CheckboxId::VerticalSync)))
+    {
+        SetVerticalSync(!IsVerticalSyncEnabled());
     }
 
-    if (CheckMouseIn(m_Pos.x + 33 - 8, m_Pos.y + 104, 124 + 8, 16))
+    const RECT resolutionRect = GetResolutionRect();
+    if (isMouseInRect(resolutionRect))
+    {
+        if (SEASON3B::IsPress(VK_LBUTTON))
+        {
+            CycleResolution(1);
+        }
+        else if (SEASON3B::IsPress(VK_RBUTTON))
+        {
+            CycleResolution(-1);
+        }
+    }
+
+    RECT volumeSlider = GetVolumeSliderRect();
+    RECT volumeHitRect = volumeSlider;
+    volumeHitRect.left -= 8;
+    volumeHitRect.right += 8;
+    if (CheckMouseIn(volumeHitRect.left, volumeHitRect.top, volumeHitRect.right - volumeHitRect.left, volumeHitRect.bottom - volumeHitRect.top))
     {
         int iOldValue = m_iVolumeLevel;
         if (MouseWheel > 0)
         {
             MouseWheel = 0;
-            m_iVolumeLevel++;
+            ++m_iVolumeLevel;
             if (m_iVolumeLevel > 10)
             {
                 m_iVolumeLevel = 10;
@@ -114,7 +187,7 @@ bool SEASON3B::CNewUIOptionWindow::UpdateMouseEvent()
         else if (MouseWheel < 0)
         {
             MouseWheel = 0;
-            m_iVolumeLevel--;
+            --m_iVolumeLevel;
             if (m_iVolumeLevel < 0)
             {
                 m_iVolumeLevel = 0;
@@ -122,7 +195,7 @@ bool SEASON3B::CNewUIOptionWindow::UpdateMouseEvent()
         }
         if (SEASON3B::IsRepeat(VK_LBUTTON))
         {
-            int x = MouseX - (m_Pos.x + 33);
+            int x = MouseX - volumeSlider.left;
             if (x < 0)
             {
                 m_iVolumeLevel = 0;
@@ -130,7 +203,7 @@ bool SEASON3B::CNewUIOptionWindow::UpdateMouseEvent()
             else
             {
                 float fValue = (10.f * x) / 124.f;
-                m_iVolumeLevel = (int)fValue + 1;
+                m_iVolumeLevel = static_cast<int>(fValue) + 1;
             }
         }
 
@@ -139,17 +212,19 @@ bool SEASON3B::CNewUIOptionWindow::UpdateMouseEvent()
             SetEffectVolumeLevel(m_iVolumeLevel);
         }
     }
-    if (CheckMouseIn(m_Pos.x + 25, m_Pos.y + 168, 141, 29))
+
+    const RECT renderSlider = GetRenderSliderRect();
+    if (CheckMouseIn(renderSlider.left, renderSlider.top, renderSlider.right - renderSlider.left, renderSlider.bottom - renderSlider.top))
     {
         if (SEASON3B::IsRepeat(VK_LBUTTON))
         {
-            int x = MouseX - (m_Pos.x + 25);
+            int x = MouseX - renderSlider.left;
             float fValue = (5.f * x) / 141.f;
-            m_iRenderLevel = (int)fValue;
+            m_iRenderLevel = static_cast<int>(fValue);
         }
     }
 
-    if (CheckMouseIn(m_Pos.x, m_Pos.y, 190, 269) == true)
+    if (CheckMouseIn(m_Pos.x, m_Pos.y, static_cast<int>(kOptionWindowWidth), static_cast<int>(kOptionWindowHeight)) == true)
     {
         return false;
     }
@@ -245,110 +320,97 @@ void SEASON3B::CNewUIOptionWindow::RenderFrame()
     float x, y;
     x = m_Pos.x;
     y = m_Pos.y;
-    RenderImage(IMAGE_OPTION_FRAME_BACK, x, y, 190.f, 269.f);
-    RenderImage(IMAGE_OPTION_FRAME_UP, x, y, 190.f, 64.f);
+    RenderImage(IMAGE_OPTION_FRAME_BACK, x, y, kOptionWindowWidth, kOptionWindowHeight);
+    RenderImage(IMAGE_OPTION_FRAME_UP, x, y, kOptionWindowWidth, 64.f);
     y += 64.f;
-    for (int i = 0; i < 16; ++i)
+
+    const float bodyHeight = kOptionWindowHeight - 64.f - 45.f;
+    const int fillCount = static_cast<int>(std::ceil(bodyHeight / 10.f));
+    for (int i = 0; i < fillCount; ++i)
     {
         RenderImage(IMAGE_OPTION_FRAME_LEFT, x, y, 21.f, 10.f);
-        RenderImage(IMAGE_OPTION_FRAME_RIGHT, x + 190 - 21, y, 21.f, 10.f);
+        RenderImage(IMAGE_OPTION_FRAME_RIGHT, x + kOptionWindowWidth - 21.f, y, 21.f, 10.f);
         y += 10.f;
     }
-    RenderImage(IMAGE_OPTION_FRAME_DOWN, x, y, 190.f, 45.f);
+    RenderImage(IMAGE_OPTION_FRAME_DOWN, x, m_Pos.y + kOptionWindowHeight - 45.f, kOptionWindowWidth, 45.f);
 
-    y = m_Pos.y + 60.f;
-    RenderImage(IMAGE_OPTION_LINE, x + 18, y, 154.f, 2.f);
-    y += 22.f;
-    RenderImage(IMAGE_OPTION_LINE, x + 18, y, 154.f, 2.f);
-    y += 40.f;
-    RenderImage(IMAGE_OPTION_LINE, x + 18, y, 154.f, 2.f);
-    y += 22.f;
-    RenderImage(IMAGE_OPTION_LINE, x + 18, y, 154.f, 2.f);
-
-    y += 60.f;
-    RenderImage(IMAGE_OPTION_LINE, x + 18, y, 154.f, 2.f);
+    const float lineWidth = kOptionWindowWidth - (kSectionLineInset * 2.f);
+    const std::array<float, 4> lineOffsets = { 60.f, 130.f, 190.f, 260.f };
+    for (float offset : lineOffsets)
+    {
+        RenderImage(IMAGE_OPTION_LINE, x + kSectionLineInset, m_Pos.y + offset, lineWidth, 2.f);
+    }
 }
 
 void SEASON3B::CNewUIOptionWindow::RenderContents()
 {
-    float x, y;
-    x = m_Pos.x + 20.f;
-    y = m_Pos.y + 46.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-    y += 22.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-    y += 22.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-    y += 40.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-    y += 22.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-
-    y += 60.f;
-    RenderImage(IMAGE_OPTION_POINT, x, y, 10.f, 10.f);
-
     g_pRenderText->SetFont(g_hFont);
     g_pRenderText->SetTextColor(255, 255, 255, 255);
     g_pRenderText->SetBgColor(0);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 48, GlobalText[386]);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 70, GlobalText[387]);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 92, GlobalText[389]);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 132, GlobalText[919]);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 154, GlobalText[1840]);
-    g_pRenderText->RenderText(m_Pos.x + 40, m_Pos.y + 154+60, L"Render Full Effects");
+
+    g_pRenderText->RenderText(m_Pos.x + kLeftTextOffsetX, m_Pos.y + 32, L"General");
+    g_pRenderText->RenderText(m_Pos.x + kRightTextOffsetX, m_Pos.y + 32, L"Graphics");
+
+    const wchar_t* generalTexts[] = { GlobalText[386], GlobalText[387], GlobalText[919] };
+    for (int i = 0; i < static_cast<int>(sizeof(generalTexts) / sizeof(generalTexts[0])); ++i)
+    {
+        const int textY = m_Pos.y + kGeneralTextStartOffset + i * kRowSpacing;
+        RenderImage(IMAGE_OPTION_POINT, m_Pos.x + kLeftPointOffsetX, static_cast<float>(textY - 4), 10.f, 10.f);
+        g_pRenderText->RenderText(m_Pos.x + kLeftTextOffsetX, textY, generalTexts[i]);
+    }
+
+    g_pRenderText->RenderText(m_Pos.x + kLeftTextOffsetX, m_Pos.y + kVolumeTextOffsetY, GlobalText[389]);
+    g_pRenderText->RenderText(m_Pos.x + kLeftTextOffsetX, m_Pos.y + kRenderTextOffsetY, GlobalText[1840]);
+
+    const wchar_t* graphicsTexts[] =
+    {
+        L"Render Full Effects",
+        L"Show Monster HP Bars",
+        L"Show FPS Counter",
+        IsVSyncAvailable() ? L"Vertical Sync" : L"Vertical Sync (Unavailable)"
+    };
+
+    for (int i = 0; i < static_cast<int>(sizeof(graphicsTexts) / sizeof(graphicsTexts[0])); ++i)
+    {
+        const int textY = m_Pos.y + kGraphicsTextStartOffset + i * kRowSpacing;
+        RenderImage(IMAGE_OPTION_POINT, m_Pos.x + kRightPointOffsetX, static_cast<float>(textY - 4), 10.f, 10.f);
+        g_pRenderText->RenderText(m_Pos.x + kRightTextOffsetX, textY, graphicsTexts[i]);
+    }
+
+    wchar_t resolutionText[64];
+    FormatResolutionText(resolutionText, sizeof(resolutionText) / sizeof(resolutionText[0]));
+    const RECT resolutionRect = GetResolutionRect();
+    g_pRenderText->RenderText(resolutionRect.left, resolutionRect.top, resolutionText);
+    g_pRenderText->RenderText(resolutionRect.left, resolutionRect.top + 14, L"Left click: next  Right click: previous");
 }
 
 void SEASON3B::CNewUIOptionWindow::RenderButtons()
 {
     m_BtnClose.Render();
 
-    if (m_bAutoAttack)
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 43, 15, 15, 0, 0);
-    }
-    else
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 43, 15, 15, 0, 15.f);
-    }
-
-    if (m_bWhisperSound)
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 65, 15, 15, 0, 0);
-    }
-    else
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 65, 15, 15, 0, 15.f);
-    }
-
-    if (m_bSlideHelp)
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 127, 15, 15, 0, 0);
-    }
-    else
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 127, 15, 15, 0, 15.f);
-    }
-
-    RenderImage(IMAGE_OPTION_VOLUME_BACK, m_Pos.x + 33, m_Pos.y + 104, 124.f, 16.f);
+    const RECT volumeSlider = GetVolumeSliderRect();
+    RenderImage(IMAGE_OPTION_VOLUME_BACK, static_cast<float>(volumeSlider.left), static_cast<float>(volumeSlider.top), 124.f, 16.f);
     if (m_iVolumeLevel > 0)
     {
-        RenderImage(IMAGE_OPTION_VOLUME_COLOR, m_Pos.x + 33, m_Pos.y + 104, 124.f * 0.1f * (m_iVolumeLevel), 16.f);
+        RenderImage(IMAGE_OPTION_VOLUME_COLOR, static_cast<float>(volumeSlider.left), static_cast<float>(volumeSlider.top), 124.f * 0.1f * (m_iVolumeLevel), 16.f);
     }
 
-    RenderImage(IMAGE_OPTION_EFFECT_BACK, m_Pos.x + 25, m_Pos.y + 168, 141.f, 29.f);
+    const RECT renderSlider = GetRenderSliderRect();
+    RenderImage(IMAGE_OPTION_EFFECT_BACK, static_cast<float>(renderSlider.left), static_cast<float>(renderSlider.top), 141.f, 29.f);
     if (m_iRenderLevel >= 0)
     {
-        RenderImage(IMAGE_OPTION_EFFECT_COLOR, m_Pos.x + 25, m_Pos.y + 168, 141.f * 0.2f * (m_iRenderLevel + 1), 29.f);
+        RenderImage(IMAGE_OPTION_EFFECT_COLOR, static_cast<float>(renderSlider.left), static_cast<float>(renderSlider.top), 141.f * 0.2f * (m_iRenderLevel + 1), 29.f);
     }
 
-    if (m_bRenderAllEffects)
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 210, 15, 15, 0, 0);
-    }
-    else
-    {
-        RenderImage(IMAGE_OPTION_BTN_CHECK, m_Pos.x + 150, m_Pos.y + 210, 15, 15, 0, 15.f);
-    }
+    RenderCheckbox(GetCheckboxRect(CheckboxId::AutoAttack), m_bAutoAttack);
+    RenderCheckbox(GetCheckboxRect(CheckboxId::WhisperSound), m_bWhisperSound);
+    RenderCheckbox(GetCheckboxRect(CheckboxId::SlideHelp), m_bSlideHelp);
+    RenderCheckbox(GetCheckboxRect(CheckboxId::RenderFullEffects), m_bRenderAllEffects);
+    RenderCheckbox(GetCheckboxRect(CheckboxId::MonsterHP), m_bShowMonsterHPBar);
+    RenderCheckbox(GetCheckboxRect(CheckboxId::ShowFPS), m_bShowFPSCounter);
+
+    const bool bAllowVSync = IsVSyncAvailable();
+    RenderCheckbox(GetCheckboxRect(CheckboxId::VerticalSync), m_bVerticalSync && bAllowVSync);
 }
 
 void SEASON3B::CNewUIOptionWindow::SetAutoAttack(bool bAuto)
@@ -409,4 +471,170 @@ void SEASON3B::CNewUIOptionWindow::SetRenderAllEffects(bool bRenderAllEffects)
 bool SEASON3B::CNewUIOptionWindow::GetRenderAllEffects()
 {
     return m_bRenderAllEffects;
+}
+
+void SEASON3B::CNewUIOptionWindow::SetShowFPSCounter(bool bShowFPS)
+{
+    m_bShowFPSCounter = bShowFPS;
+}
+
+bool SEASON3B::CNewUIOptionWindow::IsShowFPSCounter() const
+{
+    return m_bShowFPSCounter;
+}
+
+void SEASON3B::CNewUIOptionWindow::SetVerticalSync(bool bEnabled)
+{
+    if (!IsVSyncAvailable())
+    {
+        m_bVerticalSync = false;
+        return;
+    }
+
+    if (bEnabled)
+    {
+        EnableVSync();
+        SetTargetFps(-1);
+    }
+    else
+    {
+        DisableVSync();
+        SetTargetFps(60.0);
+    }
+
+    m_bVerticalSync = IsVSyncEnabled();
+}
+
+bool SEASON3B::CNewUIOptionWindow::IsVerticalSyncEnabled() const
+{
+    return m_bVerticalSync && IsVSyncAvailable();
+}
+
+void SEASON3B::CNewUIOptionWindow::SetShowMonsterHPBar(bool bShowHP)
+{
+    m_bShowMonsterHPBar = bShowHP;
+}
+
+bool SEASON3B::CNewUIOptionWindow::IsMonsterHpBarEnabled() const
+{
+    return m_bShowMonsterHPBar;
+}
+
+void SEASON3B::CNewUIOptionWindow::SetResolutionIndex(int index)
+{
+    m_iResolutionIndex = NormalizeResolutionIndex(index);
+}
+
+int SEASON3B::CNewUIOptionWindow::GetResolutionIndex() const
+{
+    return m_iResolutionIndex;
+}
+
+void SEASON3B::CNewUIOptionWindow::CycleResolution(int delta)
+{
+    if (delta == 0)
+        return;
+
+    SetResolutionIndex(m_iResolutionIndex + delta);
+    ApplyResolutionChange();
+}
+
+void SEASON3B::CNewUIOptionWindow::FormatResolutionText(wchar_t* buffer, size_t count) const
+{
+    if (buffer == nullptr || count == 0)
+    {
+        return;
+    }
+
+    wchar_t resolutionOnly[32];
+    GetResolutionOptionText(resolutionOnly, sizeof(resolutionOnly) / sizeof(resolutionOnly[0]));
+    swprintf(buffer, count, L"Resolution: %s", resolutionOnly);
+}
+
+void SEASON3B::CNewUIOptionWindow::ApplyResolutionChange() const
+{
+    m_Resolution = m_iResolutionIndex;
+
+    leaf::CRegKey regkey;
+    regkey.SetKey(leaf::CRegKey::_HKEY_CURRENT_USER, L"SOFTWARE\\Webzen\\Mu\\Config");
+    regkey.WriteDword(L"Resolution", m_Resolution);
+
+    wchar_t resolutionText[64];
+    GetResolutionOptionText(resolutionText, sizeof(resolutionText) / sizeof(resolutionText[0]));
+    if (g_pSystemLogBox)
+    {
+        wchar_t message[128];
+        swprintf(message, sizeof(message) / sizeof(message[0]), L"Resolution set to %s. Restart required to apply.", resolutionText);
+        g_pSystemLogBox->AddText(message, SEASON3B::TYPE_SYSTEM_MESSAGE);
+    }
+}
+
+void SEASON3B::CNewUIOptionWindow::GetResolutionOptionText(wchar_t* buffer, size_t count) const
+{
+    if (buffer == nullptr || count == 0)
+    {
+        return;
+    }
+
+    const auto option = GetResolutionOption(m_iResolutionIndex);
+    swprintf(buffer, count, L"%d x %d", option.width, option.height);
+}
+
+RECT SEASON3B::CNewUIOptionWindow::GetCheckboxRect(CheckboxId id) const
+{
+    RECT rect{};
+
+    const bool isGeneral = (id == CheckboxId::AutoAttack || id == CheckboxId::WhisperSound || id == CheckboxId::SlideHelp);
+    if (isGeneral)
+    {
+        const int index = static_cast<int>(id) - static_cast<int>(CheckboxId::AutoAttack);
+        rect.left = m_Pos.x + kLeftCheckboxOffsetX;
+        rect.top = m_Pos.y + kGeneralTextStartOffset + index * kRowSpacing - 5;
+    }
+    else
+    {
+        const int index = static_cast<int>(id) - static_cast<int>(CheckboxId::RenderFullEffects);
+        rect.left = m_Pos.x + kRightCheckboxOffsetX;
+        rect.top = m_Pos.y + kGraphicsTextStartOffset + index * kRowSpacing - 5;
+    }
+
+    rect.right = rect.left + kCheckboxSize;
+    rect.bottom = rect.top + kCheckboxSize;
+    return rect;
+}
+
+RECT SEASON3B::CNewUIOptionWindow::GetVolumeSliderRect() const
+{
+    RECT rect{};
+    rect.left = m_Pos.x + kLeftTextOffsetX;
+    rect.top = m_Pos.y + kVolumeSliderOffsetY;
+    rect.right = rect.left + 124;
+    rect.bottom = rect.top + 16;
+    return rect;
+}
+
+RECT SEASON3B::CNewUIOptionWindow::GetRenderSliderRect() const
+{
+    RECT rect{};
+    rect.left = m_Pos.x + kLeftTextOffsetX;
+    rect.top = m_Pos.y + kRenderSliderOffsetY;
+    rect.right = rect.left + 141;
+    rect.bottom = rect.top + 29;
+    return rect;
+}
+
+RECT SEASON3B::CNewUIOptionWindow::GetResolutionRect() const
+{
+    RECT rect{};
+    rect.left = m_Pos.x + kRightTextOffsetX;
+    rect.top = m_Pos.y + kResolutionAreaOffsetY;
+    rect.right = rect.left + kResolutionAreaWidth;
+    rect.bottom = rect.top + kResolutionAreaHeight;
+    return rect;
+}
+
+void SEASON3B::CNewUIOptionWindow::RenderCheckbox(const RECT& rect, bool checked) const
+{
+    const float v = checked ? 0.f : 15.f;
+    RenderImage(IMAGE_OPTION_BTN_CHECK, static_cast<float>(rect.left), static_cast<float>(rect.top), static_cast<float>(kCheckboxSize), static_cast<float>(kCheckboxSize), 0, v);
 }
