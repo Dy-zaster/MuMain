@@ -52,10 +52,100 @@ namespace
 
     constexpr float FIELD_MINIMAP_SIZE = 170.f;
     constexpr float FIELD_MINIMAP_MARGIN = 12.f;
-    constexpr float FIELD_MINIMAP_PADDING = 8.f;
+    constexpr float FIELD_MINIMAP_PADDING = 0.f;
     constexpr float FIELD_MINIMAP_TEXT_HEIGHT = 18.f;
     constexpr float FIELD_MINIMAP_MAP_ALPHA = 0.8f;
     constexpr float FIELD_MINIMAP_VERTICAL_OFFSET = 48.f;
+    constexpr float FIELD_MINIMAP_WORLD_OFFSET_X = -6.f;
+    constexpr float ENTITY_MARKER_UV = 17.5f / 32.f;
+
+    struct MiniMapEntityStyle
+    {
+        float Size;
+        float ColorR;
+        float ColorG;
+        float ColorB;
+    };
+
+    bool ShouldRenderEntityOnMap(const CHARACTER* entity, MiniMapEntityStyle& outStyle)
+    {
+        if (entity == NULL)
+            return false;
+
+        if (entity == Hero)
+            return false;
+
+        if (entity->Object.Live == false)
+            return false;
+
+        const BYTE kind = entity->Object.Kind;
+
+        if ((kind & KIND_PLAYER) == KIND_PLAYER)
+        {
+            outStyle = { 9.f, 0.f, 0.75f, 1.f };
+            return true;
+        }
+
+        if ((kind & KIND_NPC) == KIND_NPC)
+        {
+            outStyle = { 10.f, 0.2f, 1.f, 0.4f };
+            return true;
+        }
+
+        if ((kind & KIND_MONSTER) == KIND_MONSTER)
+        {
+            outStyle = { 8.f, 1.f, 0.35f, 0.35f };
+            return true;
+        }
+
+        return false;
+    }
+
+    bool TryGetEntityMapCoordinates(const CHARACTER* entity, float mapWidth, float mapHeight, float& outX, float& outY)
+    {
+        if (mapWidth <= 0.f || mapHeight <= 0.f)
+            return false;
+
+        const int positionX = entity->PositionX;
+        const int positionY = entity->PositionY;
+
+        if (positionX < 0 || positionX > 255 || positionY < 0 || positionY > 255)
+            return false;
+
+        outY = (static_cast<float>(positionX) / 256.f) * mapHeight;
+        outX = (static_cast<float>(positionY) / 256.f) * mapWidth;
+        return true;
+    }
+
+    void RenderDetectedEntities(float centerX, float centerY, float mapWidth, float mapHeight, float horizontalOffset = 0.f)
+    {
+        if (Hero == NULL)
+            return;
+
+        for (int i = 0; i < MAX_CHARACTERS_CLIENT; ++i)
+        {
+            CHARACTER* entity = &CharactersClient[i];
+            if (entity == nullptr)
+                continue;
+
+            MiniMapEntityStyle style;
+            if (ShouldRenderEntityOnMap(entity, style) == false)
+                continue;
+
+            float entityMapX = 0.f;
+            float entityMapY = 0.f;
+            if (TryGetEntityMapCoordinates(entity, mapWidth, mapHeight, entityMapX, entityMapY) == false)
+                continue;
+
+            entityMapX += horizontalOffset;
+
+            glColor4f(style.ColorR, style.ColorG, style.ColorB, 1.f);
+            RenderPointRotate(SEASON3B::CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 5, entityMapX, entityMapY, style.Size, style.Size, centerX, centerY, mapWidth, mapHeight, 0.f, 0.f, ENTITY_MARKER_UV, ENTITY_MARKER_UV);
+        }
+
+        glColor4f(1.f, 1.f, 1.f, 1.f);
+    }
+
     class FieldMiniMapTransformGuard
     {
     public:
@@ -256,6 +346,8 @@ bool SEASON3B::CNewUIMiniMap::Render()
         RenderAutoWalkPath(mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f);
         glColor4f(1.f, 1.f, 1.f, 1.f);
     }
+
+    RenderDetectedEntities(mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY);
 
     float Ch_wid = 12;
     RenderPointRotate(IMAGE_MINIMAP_INTERFACE + 3, Tx, Ty, Ch_wid, Ch_wid, mapScaleX * 0.5f, mapScaleY * 0.5f, mapScaleX, mapScaleY, 0.f, 0.f, 17.5f / 32.f, 17.5f / 32.f);
@@ -1038,6 +1130,10 @@ bool CNewUIFieldMiniMap::Render()
     {
         RenderMiniMapContents(mapX, mapY, mapSize);
         RenderMarkers(mapX, mapY, mapSize);
+        {
+            FieldMiniMapTransformGuard transform(mapX, mapY, mapSize);
+            RenderDetectedEntities(mapSize * 0.5f, mapSize * 0.5f, mapSize, mapSize, FIELD_MINIMAP_WORLD_OFFSET_X);
+        }
         RenderHeroMarker(mapX, mapY, mapSize);
     }
     else
@@ -1095,7 +1191,8 @@ void CNewUIFieldMiniMap::RenderHeroMarker(float mapX, float mapY, float mapSize)
     const float mapScaleX = mapSize;
     const float mapScaleY = mapSize;
     const float heroTy = (static_cast<float>(Hero->PositionX) / 256.f) * mapScaleY;
-    const float heroTx = (static_cast<float>(Hero->PositionY) / 256.f) * mapScaleX;
+    float heroTx = (static_cast<float>(Hero->PositionY) / 256.f) * mapScaleX;
+    heroTx += FIELD_MINIMAP_WORLD_OFFSET_X;
     const float centerCoordX = mapScaleX * 0.5f;
     const float centerCoordY = mapScaleY * 0.5f;
     const float iconSize = 12.f;
@@ -1132,7 +1229,8 @@ void CNewUIFieldMiniMap::RenderMarkers(float mapX, float mapY, float mapSize) co
         }
 
         const float markerTy = (static_cast<float>(entry.Location[0]) / 256.f) * mapScaleY;
-        const float markerTx = (static_cast<float>(entry.Location[1]) / 256.f) * mapScaleX;
+        float markerTx = (static_cast<float>(entry.Location[1]) / 256.f) * mapScaleX;
+        markerTx += FIELD_MINIMAP_WORLD_OFFSET_X;
 
         int textureId = CNewUIMiniMap::IMAGE_MINIMAP_INTERFACE + 5;
         float iconSize = 10.f;

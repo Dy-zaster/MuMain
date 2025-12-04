@@ -129,7 +129,6 @@ namespace SEASON3B
         void RenderMiniMapContents(float mapX, float mapY, float mapSize) const;
         void RenderHeroMarker(float mapX, float mapY, float mapSize) const;
         void RenderMarkers(float mapX, float mapY, float mapSize) const;
-        void RenderCoordinateInfo(float frameX, float frameY, float frameWidth) const;
         void RenderUnavailableText(float frameX, float frameY, float frameWidth, float frameHeight) const;
         float GetFrameX() const;
         float GetFrameY() const;
